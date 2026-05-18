@@ -4,6 +4,16 @@ import * as api from "../lib/api";
 import type { Message, Session } from "../types/chat";
 import { messageFromError } from "../utils/errors";
 
+function createOptimisticUserMessage(sessionId: string, content: string): Message {
+  return {
+    id: `optimistic-${crypto.randomUUID()}`,
+    sessionId,
+    role: "user",
+    content,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 export function useChat() {
   const sessions = ref<Session[]>([]);
   const messages = ref<Message[]>([]);
@@ -11,6 +21,7 @@ export function useChat() {
   const loading = ref(true);
   const sending = ref(false);
   const error = ref<string | null>(null);
+  const status = ref<string | null>(null);
 
   const activeSession = computed(() =>
     sessions.value.find((session) => session.id === selectedSessionId.value),
@@ -26,6 +37,7 @@ export function useChat() {
   async function loadSessions() {
     loading.value = true;
     error.value = null;
+    status.value = null;
     try {
       const response = await api.listSessions();
       sessions.value = response.sessions;
@@ -39,6 +51,7 @@ export function useChat() {
   async function selectSession(sessionId: string) {
     selectedSessionId.value = sessionId;
     error.value = null;
+    status.value = null;
     try {
       const response = await api.listMessages(sessionId);
       messages.value = response.messages;
@@ -49,6 +62,7 @@ export function useChat() {
 
   async function startSession() {
     error.value = null;
+    status.value = null;
     const response = await api.createSession();
     sessions.value = [response.session, ...sessions.value];
     await selectSession(response.session.id);
@@ -56,6 +70,7 @@ export function useChat() {
 
   async function deleteSession(sessionId: string) {
     error.value = null;
+    status.value = null;
     try {
       await api.deleteSession(sessionId);
       const remainingSessions = sessions.value.filter((session) => session.id !== sessionId);
@@ -77,8 +92,13 @@ export function useChat() {
     }
   }
 
+  function setStatus(message: string | null) {
+    status.value = message;
+  }
+
   async function sendMessage(content: string) {
-    if (!content.trim() || sending.value) {
+    const trimmedContent = content.trim();
+    if (!trimmedContent || sending.value) {
       return;
     }
 
@@ -95,8 +115,14 @@ export function useChat() {
         throw new Error("No active session");
       }
 
-      const response = await api.sendUserMessage(sessionId, content.trim());
-      messages.value = [...messages.value, ...(response.messages ?? [response.message])];
+      const optimisticMessage = createOptimisticUserMessage(sessionId, trimmedContent);
+      messages.value = [...messages.value, optimisticMessage];
+
+      const response = await api.sendUserMessage(sessionId, trimmedContent);
+      const responseMessages = response.messages ?? [response.message];
+      messages.value = messages.value.flatMap((message) =>
+        message.id === optimisticMessage.id ? responseMessages : [message],
+      );
       await loadSessions();
       selectedSessionId.value = sessionId;
     } catch (err) {
@@ -117,8 +143,10 @@ export function useChat() {
     selectedSessionId,
     sending,
     sessions,
+    status,
     loadSessions,
     deleteSession,
+    setStatus,
     selectSession,
     sendMessage,
     startSession,

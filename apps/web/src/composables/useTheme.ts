@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 type Theme = "light" | "dark" | "system";
 type AppliedTheme = "light" | "dark";
 
-const storageKey = "chatbot.theme";
+const storageKey = "mnemes.theme";
 
 export function useTheme() {
   const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");

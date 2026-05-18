@@ -17,6 +17,17 @@
   --color-danger-50: #fff5f5;
   --color-danger-300: #f1b8b8;
   --color-danger-700: #a32626;
+  --color-background: var(--app-panel);
+  --color-primary: var(--app-ink);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--app-raised);
+  --color-secondary-foreground: var(--app-ink);
+  --color-destructive: var(--app-danger-700);
+  --color-destructive-foreground: #ffffff;
+  --color-accent: var(--app-raised);
+  --color-accent-foreground: var(--app-ink);
+  --color-input: var(--app-line-strong);
+  --color-ring: var(--app-brand);
 }
 
 @layer base {
@@ -85,19 +96,6 @@
 }
 
 @layer components {
-  .app-shell {
-    @apply grid min-h-svh md:grid-cols-[300px_minmax(0,1fr)];
-    background: var(--app-shell);
-    color: var(--app-ink);
-  }
-
-  .chat-sidebar {
-    @apply flex min-h-0 flex-col border-b md:min-h-svh md:border-r md:border-b-0;
-    background: var(--app-panel);
-    border-color: var(--app-line);
-  }
-
-  .chat-sidebar__header,
   .chat-header {
     @apply flex items-center justify-between gap-4 border-b p-5;
     border-color: var(--app-line);
@@ -112,76 +110,9 @@
     color: var(--app-muted);
   }
 
-  .sidebar-title {
-    @apply text-2xl leading-tight font-semibold;
-    color: var(--app-ink);
-  }
-
   .chat-title {
     @apply text-xl leading-tight font-semibold;
     color: var(--app-ink);
-  }
-
-  .icon-button {
-    @apply grid size-9 place-items-center rounded-lg border text-xl leading-none font-semibold text-white transition focus-visible:ring-3 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-55;
-    background: var(--app-ink);
-    border-color: var(--app-line-strong);
-  }
-
-  .icon-button:hover {
-    background: var(--app-brand-strong);
-  }
-
-  .session-list {
-    @apply flex gap-2 overflow-x-auto p-3 md:min-h-0 md:flex-1 md:flex-col md:overflow-y-auto;
-  }
-
-  .session-row {
-    @apply grid min-h-14 min-w-52 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-lg border border-transparent transition md:w-full md:min-w-0;
-  }
-
-  .session-row:hover {
-    background: var(--app-subtle);
-    border-color: var(--app-line-strong);
-  }
-
-  .session-button--active {
-    background: var(--app-raised);
-    border-color: var(--app-line-strong);
-  }
-
-  .session-button {
-    @apply min-w-0 bg-transparent px-3 py-2.5 text-left;
-  }
-
-  .session-button span {
-    @apply w-full truncate text-sm font-semibold;
-    color: var(--app-ink);
-  }
-
-  .session-button small,
-  .message-card small {
-    @apply text-xs;
-    color: var(--app-muted);
-  }
-
-  .empty-copy {
-    @apply px-3 py-4 text-sm;
-    color: var(--app-muted);
-  }
-
-  .session-delete {
-    @apply mr-2 grid size-8 place-items-center rounded-md text-lg leading-none transition focus-visible:ring-3 focus-visible:outline-none;
-    color: var(--app-muted);
-  }
-
-  .session-delete:hover {
-    background: var(--app-danger-50);
-    color: var(--app-danger-700);
-  }
-
-  .chat-pane {
-    @apply grid min-h-[calc(100svh-169px)] min-w-0 grid-rows-[auto_1fr_auto_auto] md:min-h-svh;
   }
 
   .status-pill {
@@ -204,97 +135,5 @@
 
   .theme-toggle:hover {
     background: var(--app-raised);
-  }
-
-  .message-list {
-    @apply flex min-h-0 flex-col gap-3.5 overflow-y-auto p-4 md:p-6;
-  }
-
-  .empty-state {
-    @apply m-auto max-w-xl text-center;
-    color: var(--app-muted);
-  }
-
-  .empty-state h3 {
-    @apply text-lg font-semibold;
-    color: var(--app-ink);
-  }
-
-  .empty-state p {
-    @apply mt-2 leading-6;
-  }
-
-  .message-card {
-    @apply grid w-full max-w-3xl gap-2 rounded-lg border px-4 py-3.5 leading-6 whitespace-pre-wrap shadow-sm;
-  }
-
-  .message-card--user {
-    @apply self-end;
-    background: var(--app-mint-50);
-    border-color: var(--app-mint-300);
-  }
-
-  .message-card--assistant {
-    @apply self-start;
-    background: var(--app-panel);
-    border-color: var(--app-line);
-  }
-
-  .message-card--system {
-    @apply self-start;
-    background: var(--app-subtle);
-    border-color: var(--app-line);
-  }
-
-  .message-card__meta {
-    @apply flex flex-wrap items-center gap-x-2 gap-y-1 whitespace-normal;
-  }
-
-  .message-card__meta span {
-    @apply text-xs font-extrabold tracking-wide uppercase;
-    color: var(--app-meta);
-  }
-
-  .message-card__meta small {
-    @apply truncate;
-  }
-
-  .error-banner {
-    @apply mx-4 mb-3 rounded-lg border px-3 py-2.5 text-sm md:mx-6;
-    background: var(--app-danger-50);
-    border-color: var(--app-danger-300);
-    color: var(--app-danger-700);
-  }
-
-  .composer {
-    @apply grid gap-3 border-t p-4 md:grid-cols-[minmax(0,1fr)_auto] md:px-5 md:pt-4 md:pb-5;
-    background: var(--app-panel);
-    border-color: var(--app-line);
-  }
-
-  .composer__input {
-    @apply min-h-20 w-full resize-y rounded-lg border px-3 py-3 outline-none transition focus:ring-3;
-    background: var(--app-panel);
-    border-color: var(--app-line-strong);
-    color: var(--app-ink);
-  }
-
-  .composer__input::placeholder {
-    color: var(--app-muted);
-  }
-
-  .composer__input:focus {
-    border-color: var(--app-brand);
-    --tw-ring-color: color-mix(in oklab, var(--app-brand) 20%, transparent);
-  }
-
-  .composer__submit {
-    @apply self-end rounded-lg border px-5 py-3 font-bold text-white transition focus-visible:ring-3 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-55 max-md:w-full;
-    background: var(--app-brand);
-    border-color: var(--app-brand-strong);
-  }
-
-  .composer__submit:hover {
-    background: var(--app-brand-strong);
   }
 }

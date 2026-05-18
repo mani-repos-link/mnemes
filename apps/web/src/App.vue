@@ -27,7 +27,11 @@ const theme = useTheme();
         :session="chat.activeSession.value"
         @toggle-theme="theme.toggleTheme"
       />
-      <MessageList :messages="chat.messages.value" />
+      <MessageList
+        :messages="chat.messages.value"
+        :sending="chat.sending.value"
+        :session-id="chat.selectedSessionId.value"
+      />
 
       <p v-if="chat.error.value" class="error-banner">
         {{ chat.error.value }}
@@ -37,3 +41,44 @@ const theme = useTheme();
     </section>
   </main>
 </template>
+
+<style scoped>
+.app-shell {
+  display: grid;
+  min-height: 100svh;
+  background: var(--app-shell);
+  color: var(--app-ink);
+}
+
+.chat-pane {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  overflow: hidden;
+}
+
+.error-banner {
+  margin: 0 1rem 0.75rem;
+  border: 1px solid var(--app-danger-300);
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--app-danger-50);
+  color: var(--app-danger-700);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+@media (min-width: 48rem) {
+  .app-shell {
+    height: 100svh;
+    grid-template-columns: 300px minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .error-banner {
+    margin-right: 1.5rem;
+    margin-left: 1.5rem;
+  }
+}
+</style>

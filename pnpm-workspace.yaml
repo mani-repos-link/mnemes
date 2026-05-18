@@ -13,6 +13,11 @@ catalog:
   vite-plus: latest
   tailwindcss: ^4.3.0
   "@tailwindcss/vite": ^4.3.0
+  lucide-vue-next: ^1.0.0
+  reka-ui: ^2.9.7
+  class-variance-authority: ^0.7.1
+  clsx: ^2.1.1
+  tailwind-merge: ^3.6.0
 overrides:
   vite: "catalog:"
   vitest: "catalog:"
@@ -23,3 +28,5 @@ peerDependencyRules:
   allowedVersions:
     vite: "*"
     vitest: "*"
+allowBuilds:
+  vue-demi: true

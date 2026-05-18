@@ -9,6 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "lucide-vue-next": "catalog:",
+    "reka-ui": "catalog:",
+    "tailwind-merge": "catalog:",
     "vue": "^3.5.34"
   },
   "devDependencies": {
