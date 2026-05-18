@@ -2,6 +2,11 @@ import type { Message, Session } from "../types/chat";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 
+export type MessagePage = {
+  hasMore: boolean;
+  nextBefore: string | null;
+};
+
 export async function listSessions() {
   return request<{ sessions: Session[] }>("/api/sessions");
 }
@@ -19,8 +24,19 @@ export async function deleteSession(sessionId: string) {
   });
 }
 
-export async function listMessages(sessionId: string) {
-  return request<{ messages: Message[] }>(`/api/sessions/${sessionId}/messages`);
+export async function listMessages(
+  sessionId: string,
+  options: { limit?: number; before?: string } = {},
+) {
+  const params = new URLSearchParams();
+  params.set("limit", String(options.limit ?? 15));
+  if (options.before) {
+    params.set("before", options.before);
+  }
+
+  return request<{ messages: Message[]; page: MessagePage }>(
+    `/api/sessions/${sessionId}/messages?${params.toString()}`,
+  );
 }
 
 export async function sendUserMessage(sessionId: string, content: string) {

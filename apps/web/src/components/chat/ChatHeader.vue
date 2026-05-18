@@ -13,13 +13,19 @@ defineEmits<{
 </script>
 
 <template>
-  <header class="chat-header">
+  <header class="flex items-center justify-between gap-4 border-b border-line bg-header p-5">
     <div>
-      <p class="eyebrow">Session</p>
-      <h2 class="chat-title">{{ session?.title ?? "New chat" }}</h2>
+      <p class="mb-1 text-xs font-bold tracking-wide text-muted uppercase">Session</p>
+      <h2 class="text-xl leading-tight font-semibold text-ink">
+        {{ session?.title ?? "New chat" }}
+      </h2>
     </div>
-    <div class="chat-header__actions">
-      <span class="status-pill">OpenRouter + SQLite</span>
+    <div class="flex items-center gap-2">
+      <span
+        class="rounded-full border border-line-strong bg-panel px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-meta"
+      >
+        OpenRouter + SQLite
+      </span>
       <ThemeToggle :active-theme="activeTheme" @toggle="$emit('toggleTheme')" />
     </div>
   </header>

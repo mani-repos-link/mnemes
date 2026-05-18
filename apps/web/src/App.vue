@@ -11,7 +11,9 @@ const theme = useTheme();
 </script>
 
 <template>
-  <main class="app-shell">
+  <main
+    class="grid min-h-svh bg-shell text-ink md:h-svh md:grid-cols-[300px_minmax(0,1fr)] md:overflow-hidden"
+  >
     <ChatSidebar
       :loading="chat.loading.value"
       :selected-session-id="chat.selectedSessionId.value"
@@ -21,19 +23,28 @@ const theme = useTheme();
       @select-session="chat.selectSession"
     />
 
-    <section class="chat-pane" aria-label="Active chat">
+    <section
+      class="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto_auto] overflow-hidden"
+      aria-label="Active chat"
+    >
       <ChatHeader
         :active-theme="theme.appliedTheme.value"
         :session="chat.activeSession.value"
         @toggle-theme="theme.toggleTheme"
       />
       <MessageList
+        :has-older-messages="chat.messagesHasMore.value"
+        :loading-older-messages="chat.loadingOlderMessages.value"
         :messages="chat.messages.value"
         :sending="chat.sending.value"
         :session-id="chat.selectedSessionId.value"
+        @load-older-messages="chat.loadOlderMessages"
       />
 
-      <p v-if="chat.error.value" class="error-banner">
+      <p
+        v-if="chat.error.value"
+        class="mx-4 mb-3 rounded-lg border border-danger-300 bg-danger-50 px-3 py-2.5 text-sm text-danger-700 md:mx-6"
+      >
         {{ chat.error.value }}
       </p>
 
@@ -41,44 +52,3 @@ const theme = useTheme();
     </section>
   </main>
 </template>
-
-<style scoped>
-.app-shell {
-  display: grid;
-  min-height: 100svh;
-  background: var(--app-shell);
-  color: var(--app-ink);
-}
-
-.chat-pane {
-  display: grid;
-  min-width: 0;
-  min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  overflow: hidden;
-}
-
-.error-banner {
-  margin: 0 1rem 0.75rem;
-  border: 1px solid var(--app-danger-300);
-  border-radius: 0.5rem;
-  padding: 0.625rem 0.75rem;
-  background: var(--app-danger-50);
-  color: var(--app-danger-700);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-}
-
-@media (min-width: 48rem) {
-  .app-shell {
-    height: 100svh;
-    grid-template-columns: 300px minmax(0, 1fr);
-    overflow: hidden;
-  }
-
-  .error-banner {
-    margin-right: 1.5rem;
-    margin-left: 1.5rem;
-  }
-}
-</style>

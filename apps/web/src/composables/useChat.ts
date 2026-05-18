@@ -19,6 +19,9 @@ export function useChat() {
   const messages = ref<Message[]>([]);
   const selectedSessionId = ref<string | null>(null);
   const loading = ref(true);
+  const loadingOlderMessages = ref(false);
+  const messagesHasMore = ref(false);
+  const messagesNextBefore = ref<string | null>(null);
   const sending = ref(false);
   const error = ref<string | null>(null);
   const status = ref<string | null>(null);
@@ -52,9 +55,13 @@ export function useChat() {
     selectedSessionId.value = sessionId;
     error.value = null;
     status.value = null;
+    messagesHasMore.value = false;
+    messagesNextBefore.value = null;
     try {
-      const response = await api.listMessages(sessionId);
+      const response = await api.listMessages(sessionId, { limit: 15 });
       messages.value = response.messages;
+      messagesHasMore.value = response.page.hasMore;
+      messagesNextBefore.value = response.page.nextBefore;
     } catch (err) {
       error.value = messageFromError(err);
     }
@@ -86,9 +93,39 @@ export function useChat() {
       } else {
         selectedSessionId.value = null;
         messages.value = [];
+        messagesHasMore.value = false;
+        messagesNextBefore.value = null;
       }
     } catch (err) {
       error.value = messageFromError(err);
+    }
+  }
+
+  async function loadOlderMessages() {
+    const sessionId = selectedSessionId.value;
+    if (
+      !sessionId ||
+      !messagesHasMore.value ||
+      !messagesNextBefore.value ||
+      loadingOlderMessages.value
+    ) {
+      return;
+    }
+
+    loadingOlderMessages.value = true;
+    error.value = null;
+    try {
+      const response = await api.listMessages(sessionId, {
+        limit: 15,
+        before: messagesNextBefore.value,
+      });
+      messages.value = [...response.messages, ...messages.value];
+      messagesHasMore.value = response.page.hasMore;
+      messagesNextBefore.value = response.page.nextBefore;
+    } catch (err) {
+      error.value = messageFromError(err);
+    } finally {
+      loadingOlderMessages.value = false;
     }
   }
 
@@ -139,12 +176,15 @@ export function useChat() {
     activeSession,
     error,
     loading,
+    loadingOlderMessages,
     messages,
+    messagesHasMore,
     selectedSessionId,
     sending,
     sessions,
     status,
     loadSessions,
+    loadOlderMessages,
     deleteSession,
     setStatus,
     selectSession,
