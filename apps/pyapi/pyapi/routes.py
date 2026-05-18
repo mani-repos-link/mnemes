@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 
 from .config import ContextConfig
 from .providers import ChatProvider
@@ -42,12 +42,22 @@ def create_router(store: Store, chat_provider: ChatProvider, context: ContextCon
         return Response(status_code=204)
 
     @router.get("/api/sessions/{session_id}/messages")
-    async def list_messages(session_id: str) -> dict[str, list[dict[str, str | None]]]:
+    async def list_messages(
+        session_id: str,
+        limit: int = Query(default=15, ge=1, le=100),
+        before: str | None = None,
+    ) -> dict[str, object]:
         try:
-            messages = store.list_messages(session_id)
+            messages, has_more = store.list_messages_page(session_id, limit=limit, before=before)
         except NotFoundError as err:
             raise HTTPException(status_code=404, detail="session not found") from err
-        return {"messages": [message.to_api() for message in messages]}
+        return {
+            "messages": [message.to_api() for message in messages],
+            "page": {
+                "hasMore": has_more,
+                "nextBefore": messages[0].created_at if has_more and messages else None,
+            },
+        }
 
     @router.post("/api/sessions/{session_id}/messages", status_code=201)
     async def create_message(session_id: str, request: CreateMessageRequest) -> dict[str, object]:

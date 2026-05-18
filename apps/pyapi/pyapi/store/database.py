@@ -120,6 +120,37 @@ class Store:
         )
         return [message_from_row(row) for row in rows]
 
+    def list_messages_page(
+        self,
+        session_id: str,
+        limit: int = 15,
+        before: str | None = None,
+    ) -> tuple[list[MessageRecord], bool]:
+        self.get_session(session_id)
+        limit = max(1, limit)
+        params: list[object] = [session_id]
+        before_clause = ""
+        if before:
+            before_clause = "AND created_at < ?"
+            params.append(before)
+        params.append(limit + 1)
+
+        rows = self._query_all(
+            f"""
+            SELECT id, session_id, role, content, provider, model, created_at
+            FROM messages
+            WHERE session_id = ?
+            {before_clause}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            tuple(params),
+        )
+        has_more = len(rows) > limit
+        if has_more:
+            rows = rows[:limit]
+        return [message_from_row(row) for row in reversed(rows)], has_more
+
     def create_message(
         self,
         session_id: str,

@@ -1,5 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import time
 import unittest
 
 from pyapi.store import Store
@@ -17,6 +18,25 @@ class StoreTest(unittest.TestCase):
 
             store.delete_session(session.id)
             self.assertEqual(store.list_sessions(), [])
+            store.close()
+
+    def test_message_pagination_returns_latest_and_older_pages(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = Store(f"file:{Path(directory) / 'test.sqlite'}")
+            session = store.create_session("Test")
+
+            for content in ["one", "two", "three", "four"]:
+                store.create_message(session.id, "user", content)
+                time.sleep(0.001)
+
+            latest, has_more = store.list_messages_page(session.id, limit=2)
+            self.assertTrue(has_more)
+            self.assertEqual([message.content for message in latest], ["three", "four"])
+
+            older, has_more = store.list_messages_page(session.id, limit=2, before=latest[0].created_at)
+            self.assertFalse(has_more)
+            self.assertEqual([message.content for message in older], ["one", "two"])
+
             store.close()
 
 
