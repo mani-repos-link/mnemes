@@ -19,7 +19,9 @@ class OpenAICompatibleProvider:
         self.api_key = api_key
         self.model = model
 
-    async def complete(self, history: list[MessageRecord], max_response_tokens: int) -> ChatResult:
+    async def complete(
+        self, history: list[MessageRecord], max_response_tokens: int
+    ) -> ChatResult:
         if not self.api_key:
             raise ValueError(f"{self.provider} API key is required")
         if not self.model:
@@ -51,7 +53,7 @@ class OpenAICompatibleProvider:
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                     "HTTP-Referer": "http://localhost:5173",
-                    "X-Title": "Mneme",
+                    "X-Title": "Mnemes",
                 },
                 json=body,
             )
@@ -67,7 +69,12 @@ class OpenAICompatibleProvider:
         payload = response.json()
         if response.status_code < 200 or response.status_code >= 300:
             message = payload.get("error", {}).get("message") or response.reason_phrase
-            logger.warning("%s error status=%d message=%s", self.provider, response.status_code, message)
+            logger.warning(
+                "%s error status=%d message=%s",
+                self.provider,
+                response.status_code,
+                message,
+            )
             raise ValueError(f"{self.provider} error: {message}")
 
         choices = payload.get("choices") or []
@@ -89,7 +96,8 @@ def build_messages(history: list[MessageRecord]) -> list[dict[str, str]]:
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful assistant in a local, self-hosted chatbot. Answer clearly and concisely.",
+            "content": "You are a helpful assistant, chatbot. Answer clearly and concisely.",
+            # "context": "..."
         }
     ]
     for message in history:

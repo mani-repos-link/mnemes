@@ -38,7 +38,7 @@ logger.info(
 
 store = Store(config.database_url)
 chat_provider = create_chat_provider(config.chat)
-app = FastAPI(title="Mneme API")
+app = FastAPI(title="Mnemes API")
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,1 +1,1 @@
-"""Python API for Mneme."""
+"""Python API for Mnemes."""
