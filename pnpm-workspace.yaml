@@ -18,6 +18,10 @@ catalog:
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   tailwind-merge: ^3.6.0
+  markdown-it: ^14.1.1
+  dompurify: ^3.4.3
+  shiki: ^4.0.2
+  "@types/markdown-it": ^14.1.2
 overrides:
   vite: "catalog:"
   vitest: "catalog:"

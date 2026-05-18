@@ -11,13 +11,16 @@
   "dependencies": {
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
+    "dompurify": "catalog:",
     "lucide-vue-next": "catalog:",
+    "markdown-it": "catalog:",
     "reka-ui": "catalog:",
     "tailwind-merge": "catalog:",
     "vue": "^3.5.34"
   },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:",
+    "@types/markdown-it": "catalog:",
     "@types/node": "^24.12.3",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",

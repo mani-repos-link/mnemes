@@ -142,7 +142,7 @@ function handleSessionScroll(event: Event) {
               <MoreHorizontal />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" @click.stop>
+          <DropdownMenuContent align="end">
             <DropdownMenuItem class="text-destructive" @select="requestDelete(session)">
               <Trash2 />
               Delete
