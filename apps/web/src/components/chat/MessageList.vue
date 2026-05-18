@@ -184,17 +184,21 @@ watch(
             >
                 {{ message.content }}
             </p>
-            <button
-                v-if="isLongMessage(message)"
-                class="w-fit text-sm font-semibold text-brand hover:text-brand-strong"
-                type="button"
-                @click="toggleMessage(message.id)"
-            >
-                {{ isExpanded(message.id) ? "Read less" : "Read more" }}
-            </button>
-            <small class="text-xs text-muted">{{
+            <div class="w-full flex items-center justify-between">
+              <small class="text-xs text-muted">{{
                 formatTime(message.createdAt)
             }}</small>
+
+              <button
+                  v-if="isLongMessage(message)"
+                  class="w-fit text-md underline font-semibold text-brand hover:text-brand-strong"
+                  type="button"
+                  @click="toggleMessage(message.id)"
+              >
+                  {{ isExpanded(message.id) ? "Read less" : "Read more" }}
+              </button>
+            </div>
+            
         </article>
 
         <article
