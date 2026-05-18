@@ -1,5 +1,5 @@
 [project]
-name = "mneme-pyapi"
+name = "mnemes-pyapi"
 version = "0.0.0"
 requires-python = ">=3.10"
 dependencies = ["fastapi>=0.124.0", "uvicorn[standard]>=0.38.0", "httpx>=0.28.0"]
