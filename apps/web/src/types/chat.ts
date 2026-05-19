@@ -12,5 +12,7 @@ export type Message = {
   content: string;
   provider?: string;
   model?: string;
+  parentMessageId?: string | null;
+  activeResponseId?: string | null;
   createdAt: string;
 };

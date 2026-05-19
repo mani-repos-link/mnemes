@@ -41,15 +41,22 @@ class Store:
                   content TEXT NOT NULL,
                   provider TEXT,
                   model TEXT,
+                  parent_message_id TEXT,
+                  active_response_id TEXT,
                   token_count INTEGER,
                   created_at TEXT NOT NULL,
-                  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+                  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+                  FOREIGN KEY (parent_message_id) REFERENCES messages(id) ON DELETE SET NULL,
+                  FOREIGN KEY (active_response_id) REFERENCES messages(id) ON DELETE SET NULL
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_messages_session_created_at ON messages(session_id, created_at ASC);
                 """
             )
+            self._ensure_message_branch_columns()
+            self._db.execute("CREATE INDEX IF NOT EXISTS idx_messages_parent_message_id ON messages(parent_message_id)")
+            self._backfill_message_branches()
 
     def list_sessions(self) -> list[SessionRecord]:
         rows = self._query_all(
@@ -111,7 +118,7 @@ class Store:
         self.get_session(session_id)
         rows = self._query_all(
             """
-            SELECT id, session_id, role, content, provider, model, created_at
+            SELECT id, session_id, role, content, provider, model, parent_message_id, active_response_id, created_at
             FROM messages
             WHERE session_id = ?
             ORDER BY created_at ASC
@@ -119,6 +126,34 @@ class Store:
             (session_id,),
         )
         return [message_from_row(row) for row in rows]
+
+    def list_context_messages(
+        self,
+        session_id: str,
+        through_user_message_id: str | None = None,
+    ) -> list[MessageRecord]:
+        messages = self.list_messages(session_id)
+        by_id = {message.id: message for message in messages}
+        context: list[MessageRecord] = []
+
+        for message in messages:
+            if message.role == "assistant" and message.parent_message_id:
+                continue
+
+            if message.role == "user":
+                context.append(message)
+                if message.active_response_id:
+                    active_response = by_id.get(message.active_response_id)
+                    if active_response is not None:
+                        context.append(active_response)
+                if message.id == through_user_message_id:
+                    break
+                continue
+
+            if message.role in {"assistant", "system"}:
+                context.append(message)
+
+        return context
 
     def list_messages_page(
         self,
@@ -137,7 +172,7 @@ class Store:
 
         rows = self._query_all(
             f"""
-            SELECT id, session_id, role, content, provider, model, created_at
+            SELECT id, session_id, role, content, provider, model, parent_message_id, active_response_id, created_at
             FROM messages
             WHERE session_id = ?
             {before_clause}
@@ -158,6 +193,8 @@ class Store:
         content: str,
         provider: str | None = None,
         model: str | None = None,
+        parent_message_id: str | None = None,
+        make_active: bool = False,
     ) -> MessageRecord:
         role = role.strip()
         content = content.strip()
@@ -165,8 +202,24 @@ class Store:
             raise ValueError("invalid role")
         if not content:
             raise ValueError("content is required")
+        if parent_message_id and role != "assistant":
+            raise ValueError("only assistant messages can have a parent")
 
         self.get_session(session_id)
+        if parent_message_id:
+            parent = self._query_one(
+                """
+                SELECT id, role
+                FROM messages
+                WHERE id = ? AND session_id = ?
+                """,
+                (parent_message_id, session_id),
+            )
+            if parent is None:
+                raise NotFoundError("parent message not found")
+            if parent["role"] != "user":
+                raise ValueError("assistant parent must be a user message")
+
         now = timestamp()
         message = MessageRecord(
             id=new_id("msg"),
@@ -175,14 +228,16 @@ class Store:
             content=content,
             provider=provider,
             model=model,
+            parent_message_id=parent_message_id,
+            active_response_id=None,
             created_at=now,
         )
 
         with self._lock, self._db:
             self._db.execute(
                 """
-                INSERT INTO messages (id, session_id, role, content, provider, model, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO messages (id, session_id, role, content, provider, model, parent_message_id, active_response_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     message.id,
@@ -191,9 +246,20 @@ class Store:
                     message.content,
                     message.provider,
                     message.model,
+                    message.parent_message_id,
+                    message.active_response_id,
                     message.created_at,
                 ),
             )
+            if parent_message_id and make_active:
+                self._db.execute(
+                    """
+                    UPDATE messages
+                    SET active_response_id = ?
+                    WHERE id = ? AND session_id = ?
+                    """,
+                    (message.id, parent_message_id, session_id),
+                )
             self._db.execute(
                 """
                 UPDATE sessions
@@ -203,6 +269,91 @@ class Store:
                 (now, session_id),
             )
         return message
+
+    def set_active_response(self, session_id: str, assistant_message_id: str) -> MessageRecord:
+        self.get_session(session_id)
+        assistant = self._query_one(
+            """
+            SELECT id, session_id, role, content, provider, model, parent_message_id, active_response_id, created_at
+            FROM messages
+            WHERE id = ? AND session_id = ?
+            """,
+            (assistant_message_id, session_id),
+        )
+        if assistant is None:
+            raise NotFoundError("message not found")
+        if assistant["role"] != "assistant" or not assistant["parent_message_id"]:
+            raise ValueError("only assistant alternatives can be activated")
+
+        with self._lock, self._db:
+            self._db.execute(
+                """
+                UPDATE messages
+                SET active_response_id = ?
+                WHERE id = ? AND session_id = ?
+                """,
+                (assistant_message_id, assistant["parent_message_id"], session_id),
+            )
+            self._db.execute(
+                """
+                UPDATE sessions
+                SET updated_at = ?
+                WHERE id = ?
+                """,
+                (timestamp(), session_id),
+            )
+        return message_from_row(assistant)
+
+    def _ensure_message_branch_columns(self) -> None:
+        columns = {
+            row["name"]
+            for row in self._db.execute("PRAGMA table_info(messages)").fetchall()
+        }
+        if "parent_message_id" not in columns:
+            self._db.execute("ALTER TABLE messages ADD COLUMN parent_message_id TEXT")
+        if "active_response_id" not in columns:
+            self._db.execute("ALTER TABLE messages ADD COLUMN active_response_id TEXT")
+
+    def _backfill_message_branches(self) -> None:
+        rows = self._db.execute(
+            """
+            SELECT id, session_id, role, parent_message_id
+            FROM messages
+            ORDER BY session_id ASC, created_at ASC
+            """
+        ).fetchall()
+        last_user_by_session: dict[str, str] = {}
+        active_response_by_user: dict[str, str] = {}
+
+        for row in rows:
+            if row["role"] == "user":
+                last_user_by_session[row["session_id"]] = row["id"]
+                continue
+            if row["role"] != "assistant" or row["parent_message_id"]:
+                continue
+
+            parent_id = last_user_by_session.get(row["session_id"])
+            if not parent_id:
+                continue
+            self._db.execute(
+                """
+                UPDATE messages
+                SET parent_message_id = ?
+                WHERE id = ?
+                """,
+                (parent_id, row["id"]),
+            )
+            active_response_by_user[parent_id] = row["id"]
+
+        for user_id, assistant_id in active_response_by_user.items():
+            self._db.execute(
+                """
+                UPDATE messages
+                SET active_response_id = COALESCE(active_response_id, ?)
+                WHERE id = ?
+                """,
+                (assistant_id, user_id),
+            )
 
     def _query_one(self, query: str, params: tuple[object, ...] = ()) -> sqlite3.Row | None:
         with self._lock:
@@ -230,6 +381,8 @@ def message_from_row(row: sqlite3.Row) -> MessageRecord:
         content=row["content"],
         provider=row["provider"],
         model=row["model"],
+        parent_message_id=row["parent_message_id"],
+        active_response_id=row["active_response_id"],
         created_at=row["created_at"],
     )
 

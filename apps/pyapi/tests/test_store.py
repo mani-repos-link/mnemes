@@ -39,6 +39,39 @@ class StoreTest(unittest.TestCase):
 
             store.close()
 
+    def test_context_uses_only_active_response_for_prompt(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = Store(f"file:{Path(directory) / 'test.sqlite'}")
+            session = store.create_session("Test")
+            prompt = store.create_message(session.id, "user", "Explain this")
+            first = store.create_message(
+                session.id,
+                "assistant",
+                "First answer",
+                parent_message_id=prompt.id,
+                make_active=True,
+            )
+            second = store.create_message(
+                session.id,
+                "assistant",
+                "Second answer",
+                parent_message_id=prompt.id,
+                make_active=True,
+            )
+
+            context = store.list_context_messages(session.id)
+            self.assertEqual([message.content for message in context], ["Explain this", "Second answer"])
+
+            store.set_active_response(session.id, first.id)
+            context = store.list_context_messages(session.id)
+            self.assertEqual([message.content for message in context], ["Explain this", "First answer"])
+
+            self.assertEqual(store.list_messages(session.id)[0].active_response_id, first.id)
+            self.assertEqual(store.list_messages(session.id)[1].parent_message_id, prompt.id)
+            self.assertEqual(store.list_messages(session.id)[2].parent_message_id, prompt.id)
+            self.assertEqual(second.content, "Second answer")
+            store.close()
+
 
 if __name__ == "__main__":
     unittest.main()

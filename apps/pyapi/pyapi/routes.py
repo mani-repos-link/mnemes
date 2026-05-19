@@ -79,7 +79,7 @@ def create_router(store: Store, chat_provider: ChatProvider, context: ContextCon
         messages = [user_message]
         if request.role == "user":
             try:
-                history = store.list_messages(session_id)
+                history = store.list_context_messages(session_id)
                 history = history[-context.recent_message_limit :]
                 result = await chat_provider.complete(history, context.max_response_tokens)
                 assistant_message = store.create_message(
@@ -88,6 +88,8 @@ def create_router(store: Store, chat_provider: ChatProvider, context: ContextCon
                     result.content,
                     provider=result.provider,
                     model=result.model,
+                    parent_message_id=user_message.id,
+                    make_active=True,
                 )
             except Exception as err:
                 logger.exception("message create chat_error session_id=%s", session_id)
@@ -101,5 +103,73 @@ def create_router(store: Store, chat_provider: ChatProvider, context: ContextCon
             time.monotonic() - started,
         )
         return {"message": user_message.to_api(), "messages": [message.to_api() for message in messages]}
+
+    @router.post("/api/sessions/{session_id}/messages/{message_id}/activate")
+    async def activate_message(session_id: str, message_id: str) -> dict[str, dict[str, str | None]]:
+        try:
+            message = store.set_active_response(session_id, message_id)
+        except NotFoundError as err:
+            raise HTTPException(status_code=404, detail="message not found") from err
+        except ValueError as err:
+            raise HTTPException(status_code=400, detail=str(err)) from err
+        return {"message": message.to_api()}
+
+    @router.post("/api/sessions/{session_id}/messages/{message_id}/regenerate", status_code=201)
+    async def regenerate_message(session_id: str, message_id: str) -> dict[str, object]:
+        started = time.monotonic()
+        try:
+            history = store.list_messages(session_id)
+        except NotFoundError as err:
+            raise HTTPException(status_code=404, detail="session not found") from err
+
+        target_index = next((index for index, message in enumerate(history) if message.id == message_id), None)
+        if target_index is None:
+            raise HTTPException(status_code=404, detail="message not found")
+
+        anchor_index = target_index
+        if history[target_index].role == "assistant":
+            parent_id = history[target_index].parent_message_id
+            anchor_index = (
+                next((index for index, message in enumerate(history) if message.id == parent_id), -1)
+                if parent_id
+                else next(
+                    (
+                        index
+                        for index in range(target_index - 1, -1, -1)
+                        if history[index].role == "user"
+                    ),
+                    -1,
+                )
+            )
+            if anchor_index < 0:
+                raise HTTPException(status_code=400, detail="no user message to regenerate from")
+        elif history[target_index].role != "user":
+            raise HTTPException(status_code=400, detail="only user or assistant messages can be regenerated")
+
+        try:
+            anchor_user = history[anchor_index]
+            context_history = store.list_context_messages(session_id, through_user_message_id=anchor_user.id)
+            context_history = context_history[-context.recent_message_limit :]
+            result = await chat_provider.complete(context_history, context.max_response_tokens)
+            assistant_message = store.create_message(
+                session_id,
+                "assistant",
+                result.content,
+                provider=result.provider,
+                model=result.model,
+                parent_message_id=anchor_user.id,
+                make_active=True,
+            )
+        except Exception as err:
+            logger.exception("message regenerate chat_error session_id=%s message_id=%s", session_id, message_id)
+            raise HTTPException(status_code=502, detail=str(err)) from err
+
+        logger.info(
+            "message regenerate done session_id=%s message_id=%s duration=%.3fs",
+            session_id,
+            message_id,
+            time.monotonic() - started,
+        )
+        return {"message": assistant_message.to_api()}
 
     return router

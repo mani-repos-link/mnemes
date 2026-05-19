@@ -27,6 +27,8 @@ class MessageRecord:
     content: str
     provider: str | None
     model: str | None
+    parent_message_id: str | None
+    active_response_id: str | None
     created_at: str
 
     def to_api(self) -> dict[str, str | None]:
@@ -37,5 +39,7 @@ class MessageRecord:
             "content": self.content,
             "provider": self.provider,
             "model": self.model,
+            "parentMessageId": self.parent_message_id,
+            "activeResponseId": self.active_response_id,
             "createdAt": self.created_at,
         }

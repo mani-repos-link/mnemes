@@ -1,4 +1,4 @@
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 
 import * as api from "../lib/api";
 import type { Message, Session } from "../types/chat";
@@ -19,9 +19,11 @@ export function useChat() {
   const messages = ref<Message[]>([]);
   const selectedSessionId = ref<string | null>(null);
   const loading = ref(true);
+  const activatingMessageId = ref<string | null>(null);
   const loadingOlderMessages = ref(false);
   const messagesHasMore = ref(false);
   const messagesNextBefore = ref<string | null>(null);
+  const regeneratingMessageId = ref<string | null>(null);
   const sending = ref(false);
   const error = ref<string | null>(null);
   const status = ref<string | null>(null);
@@ -29,13 +31,33 @@ export function useChat() {
   const activeSession = computed(() =>
     sessions.value.find((session) => session.id === selectedSessionId.value),
   );
+  const draftKey = computed(() =>
+    selectedSessionId.value
+      ? `mnemes.draft.s.${selectedSessionId.value}`
+      : `mnemes.draft.new.${windowDraftId()}`,
+  );
 
   onMounted(async () => {
     await loadSessions();
-    if (sessions.value[0]) {
-      await selectSession(sessions.value[0].id);
+    const routeSessionId = sessionIdFromPath();
+    if (routeSessionId) {
+      await selectSession(routeSessionId, { replaceUrl: true });
     }
+    window.addEventListener("popstate", handlePopState);
   });
+
+  onUnmounted(() => {
+    window.removeEventListener("popstate", handlePopState);
+  });
+
+  async function handlePopState() {
+    const routeSessionId = sessionIdFromPath();
+    if (routeSessionId) {
+      await selectSession(routeSessionId, { skipUrl: true });
+    } else {
+      newSession({ skipUrl: true });
+    }
+  }
 
   async function loadSessions() {
     loading.value = true;
@@ -51,7 +73,10 @@ export function useChat() {
     }
   }
 
-  async function selectSession(sessionId: string) {
+  async function selectSession(
+    sessionId: string,
+    options: { replaceUrl?: boolean; skipUrl?: boolean } = {},
+  ) {
     selectedSessionId.value = sessionId;
     error.value = null;
     status.value = null;
@@ -62,17 +87,31 @@ export function useChat() {
       messages.value = response.messages;
       messagesHasMore.value = response.page.hasMore;
       messagesNextBefore.value = response.page.nextBefore;
+      if (!options.skipUrl) {
+        writeSessionPath(sessionId, { replace: options.replaceUrl });
+      }
     } catch (err) {
       error.value = messageFromError(err);
+      selectedSessionId.value = null;
+      messages.value = [];
+      messagesHasMore.value = false;
+      messagesNextBefore.value = null;
+      if (!options.skipUrl) {
+        writeRootPath({ replace: true });
+      }
     }
   }
 
-  async function startSession() {
+  function newSession(options: { skipUrl?: boolean } = {}) {
     error.value = null;
     status.value = null;
-    const response = await api.createSession();
-    sessions.value = [response.session, ...sessions.value];
-    await selectSession(response.session.id);
+    selectedSessionId.value = null;
+    messages.value = [];
+    messagesHasMore.value = false;
+    messagesNextBefore.value = null;
+    if (!options.skipUrl) {
+      writeRootPath();
+    }
   }
 
   async function deleteSession(sessionId: string) {
@@ -89,12 +128,9 @@ export function useChat() {
 
       const nextSession = remainingSessions[0];
       if (nextSession) {
-        await selectSession(nextSession.id);
+        await selectSession(nextSession.id, { replaceUrl: true });
       } else {
-        selectedSessionId.value = null;
-        messages.value = [];
-        messagesHasMore.value = false;
-        messagesNextBefore.value = null;
+        newSession();
       }
     } catch (err) {
       error.value = messageFromError(err);
@@ -144,7 +180,10 @@ export function useChat() {
 
     try {
       if (!selectedSessionId.value) {
-        await startSession();
+        const response = await api.createSession();
+        sessions.value = [response.session, ...sessions.value];
+        selectedSessionId.value = response.session.id;
+        writeSessionPath(response.session.id);
       }
 
       const sessionId = selectedSessionId.value;
@@ -172,23 +211,108 @@ export function useChat() {
     }
   }
 
+  async function regenerateMessage(messageId: string) {
+    const sessionId = selectedSessionId.value;
+    if (!sessionId || sending.value || regeneratingMessageId.value) {
+      return;
+    }
+
+    regeneratingMessageId.value = messageId;
+    error.value = null;
+
+    try {
+      const response = await api.regenerateMessage(sessionId, messageId);
+      messages.value = [...messages.value, response.message];
+      await loadSessions();
+      selectedSessionId.value = sessionId;
+    } catch (err) {
+      error.value = messageFromError(err);
+    } finally {
+      regeneratingMessageId.value = null;
+    }
+  }
+
+  async function activateMessage(messageId: string) {
+    const sessionId = selectedSessionId.value;
+    if (!sessionId || activatingMessageId.value) {
+      return;
+    }
+
+    activatingMessageId.value = messageId;
+    error.value = null;
+
+    try {
+      const response = await api.activateMessage(sessionId, messageId);
+      const parentMessageId = response.message.parentMessageId;
+      messages.value = messages.value.map((message) =>
+        parentMessageId && message.id === parentMessageId
+          ? { ...message, activeResponseId: response.message.id }
+          : message,
+      );
+    } catch (err) {
+      error.value = messageFromError(err);
+    } finally {
+      activatingMessageId.value = null;
+    }
+  }
+
   return {
+    activatingMessageId,
     activeSession,
     error,
     loading,
     loadingOlderMessages,
     messages,
     messagesHasMore,
+    regeneratingMessageId,
     selectedSessionId,
     sending,
     sessions,
     status,
     loadSessions,
+    activateMessage,
     loadOlderMessages,
     deleteSession,
+    regenerateMessage,
     setStatus,
     selectSession,
     sendMessage,
-    startSession,
+    newSession,
+    draftKey,
   };
+}
+
+function sessionIdFromPath() {
+  const match = window.location.pathname.match(/^\/s\/([^/]+)\/?$/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+function writeSessionPath(sessionId: string, options: { replace?: boolean } = {}) {
+  const path = `/s/${encodeURIComponent(sessionId)}`;
+  writePath(path, options);
+}
+
+function writeRootPath(options: { replace?: boolean } = {}) {
+  writePath("/", options);
+}
+
+function writePath(path: string, options: { replace?: boolean } = {}) {
+  if (window.location.pathname === path) {
+    return;
+  }
+
+  const method = options.replace ? "replaceState" : "pushState";
+  window.history[method](null, "", path);
+}
+
+function windowDraftId() {
+  const key = "mnemes.window.id";
+  const existing = window.sessionStorage.getItem(key);
+  if (existing) {
+    return existing;
+  }
+
+  const id = crypto.randomUUID();
+  window.sessionStorage.setItem(key, id);
+  return id;
 }

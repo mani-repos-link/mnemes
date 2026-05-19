@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 
-defineProps<{
+const props = defineProps<{
+  draftKey: string;
   sending: boolean;
 }>();
 
@@ -10,6 +11,30 @@ const emit = defineEmits<{
 }>();
 
 const draft = ref("");
+let loadingDraft = false;
+
+watch(
+  () => props.draftKey,
+  (draftKey) => {
+    loadingDraft = true;
+    draft.value = localStorage.getItem(draftKey) ?? "";
+    loadingDraft = false;
+  },
+  { immediate: true },
+);
+
+watch(draft, (value) => {
+  if (loadingDraft) {
+    return;
+  }
+
+  const content = value.trim();
+  if (content) {
+    localStorage.setItem(props.draftKey, value);
+  } else {
+    localStorage.removeItem(props.draftKey);
+  }
+});
 
 function submit() {
   const content = draft.value.trim();
@@ -19,6 +44,7 @@ function submit() {
 
   emit("send", content);
   draft.value = "";
+  localStorage.removeItem(props.draftKey);
 }
 </script>
 

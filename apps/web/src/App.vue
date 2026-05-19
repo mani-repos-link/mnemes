@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted, ref, watch } from "vue";
 import ChatComposer from "./components/chat/ChatComposer.vue";
 import ChatHeader from "./components/chat/ChatHeader.vue";
 import ChatSidebar from "./components/chat/ChatSidebar.vue";
@@ -8,19 +9,33 @@ import { useTheme } from "./composables/useTheme";
 
 const chat = useChat();
 const theme = useTheme();
+const sidebarCollapsed = ref(false);
+
+onMounted(() => {
+  sidebarCollapsed.value = localStorage.getItem("mnemes.sidebar.collapsed") === "true";
+});
+
+watch(sidebarCollapsed, (collapsed) => {
+  localStorage.setItem("mnemes.sidebar.collapsed", String(collapsed));
+});
 </script>
 
 <template>
   <main
-    class="grid min-h-svh bg-shell text-ink md:h-svh md:grid-cols-[300px_minmax(0,1fr)] md:overflow-hidden"
+    class="grid min-h-svh bg-shell text-ink md:h-svh md:overflow-hidden"
+    :class="
+      sidebarCollapsed ? 'md:grid-cols-[64px_minmax(0,1fr)]' : 'md:grid-cols-[300px_minmax(0,1fr)]'
+    "
   >
     <ChatSidebar
+      :collapsed="sidebarCollapsed"
       :loading="chat.loading.value"
       :selected-session-id="chat.selectedSessionId.value"
       :sessions="chat.sessions.value"
       @delete-session="chat.deleteSession"
-      @new-session="chat.startSession"
+      @new-session="chat.newSession"
       @select-session="chat.selectSession"
+      @toggle-collapse="sidebarCollapsed = !sidebarCollapsed"
     />
 
     <section
@@ -33,12 +48,16 @@ const theme = useTheme();
         @toggle-theme="theme.toggleTheme"
       />
       <MessageList
+        :activating-message-id="chat.activatingMessageId.value"
         :has-older-messages="chat.messagesHasMore.value"
         :loading-older-messages="chat.loadingOlderMessages.value"
         :messages="chat.messages.value"
+        :regenerating-message-id="chat.regeneratingMessageId.value"
         :sending="chat.sending.value"
         :session-id="chat.selectedSessionId.value"
+        @activate-message="chat.activateMessage"
         @load-older-messages="chat.loadOlderMessages"
+        @regenerate-message="chat.regenerateMessage"
       />
 
       <p
@@ -48,7 +67,11 @@ const theme = useTheme();
         {{ chat.error.value }}
       </p>
 
-      <ChatComposer :sending="chat.sending.value" @send="chat.sendMessage" />
+      <ChatComposer
+        :draft-key="chat.draftKey.value"
+        :sending="chat.sending.value"
+        @send="chat.sendMessage"
+      />
     </section>
   </main>
 </template>

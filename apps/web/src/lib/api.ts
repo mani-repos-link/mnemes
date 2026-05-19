@@ -49,6 +49,24 @@ export async function sendUserMessage(sessionId: string, content: string) {
   );
 }
 
+export async function regenerateMessage(sessionId: string, messageId: string) {
+  return request<{ message: Message }>(
+    `/api/sessions/${sessionId}/messages/${messageId}/regenerate`,
+    {
+      method: "POST",
+    },
+  );
+}
+
+export async function activateMessage(sessionId: string, messageId: string) {
+  return request<{ message: Message }>(
+    `/api/sessions/${sessionId}/messages/${messageId}/activate`,
+    {
+      method: "POST",
+    },
+  );
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("Content-Type", "application/json");
