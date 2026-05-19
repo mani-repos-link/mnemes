@@ -24,6 +24,13 @@ export async function deleteSession(sessionId: string) {
   });
 }
 
+export async function updateSessionTitle(sessionId: string, title: string) {
+  return request<{ session: Session }>(`/api/sessions/${sessionId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ title }),
+  });
+}
+
 export async function listMessages(
   sessionId: string,
   options: { limit?: number; before?: string } = {},

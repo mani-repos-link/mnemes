@@ -137,6 +137,25 @@ export function useChat() {
     }
   }
 
+  async function renameSession(sessionId: string, title: string) {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      error.value = "Title is required";
+      return;
+    }
+
+    error.value = null;
+    status.value = null;
+    try {
+      const response = await api.updateSessionTitle(sessionId, trimmedTitle);
+      sessions.value = sessions.value.map((session) =>
+        session.id === sessionId ? response.session : session,
+      );
+    } catch (err) {
+      error.value = messageFromError(err);
+    }
+  }
+
   async function loadOlderMessages() {
     const sessionId = selectedSessionId.value;
     if (
@@ -273,6 +292,7 @@ export function useChat() {
     activateMessage,
     loadOlderMessages,
     deleteSession,
+    renameSession,
     regenerateMessage,
     setStatus,
     selectSession,

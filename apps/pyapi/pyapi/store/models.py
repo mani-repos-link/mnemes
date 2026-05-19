@@ -43,3 +43,28 @@ class MessageRecord:
             "activeResponseId": self.active_response_id,
             "createdAt": self.created_at,
         }
+
+
+@dataclass(frozen=True)
+class SessionSummaryRecord:
+    id: str
+    session_id: str
+    content: str
+    covered_message_id: str | None
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class MemoryItemRecord:
+    id: str
+    session_id: str
+    source_type: str
+    source_id: str
+    content: str
+    embedding_dim: int | None
+    embedding_model: str | None
+    embedding_provider: str | None
+    score: float | None
+    created_at: str
+    updated_at: str

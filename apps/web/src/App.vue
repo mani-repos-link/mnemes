@@ -34,6 +34,7 @@ watch(sidebarCollapsed, (collapsed) => {
       :sessions="chat.sessions.value"
       @delete-session="chat.deleteSession"
       @new-session="chat.newSession"
+      @rename-session="chat.renameSession"
       @select-session="chat.selectSession"
       @toggle-collapse="sidebarCollapsed = !sidebarCollapsed"
     />

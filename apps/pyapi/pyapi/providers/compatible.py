@@ -7,17 +7,27 @@ import httpx
 
 from pyapi.store import MessageRecord
 
-from .types import ChatResult
+from .types import ChatResult, EmptyModelResponseError
 
 logger = logging.getLogger("pyapi.provider")
 
 
 class OpenAICompatibleProvider:
-    def __init__(self, provider: str, base_url: str, api_key: str, model: str):
+    def __init__(
+        self,
+        provider: str,
+        base_url: str,
+        api_key: str,
+        model: str,
+        http_referer: str,
+        app_title: str,
+    ):
         self.provider = provider
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
+        self.http_referer = http_referer
+        self.app_title = app_title
 
     async def complete(
         self, history: list[MessageRecord], max_response_tokens: int
@@ -52,8 +62,8 @@ class OpenAICompatibleProvider:
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "http://localhost:5173",
-                    "X-Title": "Mnemes",
+                    "HTTP-Referer": self.http_referer,
+                    "X-Title": self.app_title,
                 },
                 json=body,
             )
@@ -79,11 +89,13 @@ class OpenAICompatibleProvider:
 
         choices = payload.get("choices") or []
         if not choices:
-            raise ValueError(f"{self.provider} returned no choices")
+            logger.warning("%s returned no choices payload_keys=%s", self.provider, sorted(payload.keys()))
+            raise EmptyModelResponseError(self.provider)
 
-        content = choices[0].get("message", {}).get("content", "").strip()
+        content = extract_message_content(choices[0])
         if not content:
-            raise ValueError(f"{self.provider} returned an empty message")
+            logger.warning("%s returned empty content payload=%s", self.provider, choices[0])
+            raise EmptyModelResponseError(self.provider)
 
         return ChatResult(
             content=content,
@@ -96,11 +108,39 @@ def build_messages(history: list[MessageRecord]) -> list[dict[str, str]]:
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful assistant, chatbot. Answer clearly and concisely.",
-            # "context": "..."
+            "content": (
+                "You are a helpful assistant, chatbot. Answer clearly and concisely. "
+                "If the user's request is unclear, nonsensical, or cannot be processed, say so briefly "
+                "and ask them to rephrase instead of returning an empty answer."
+            ),
         }
     ]
     for message in history:
         if message.role in {"user", "assistant", "system"}:
             messages.append({"role": message.role, "content": message.content})
     return messages
+
+
+def extract_message_content(choice: dict[str, object]) -> str:
+    message = choice.get("message")
+    if not isinstance(message, dict):
+        return ""
+
+    raw_content = message.get("content")
+    if isinstance(raw_content, str):
+        return raw_content.strip()
+
+    if isinstance(raw_content, list):
+        parts: list[str] = []
+        for item in raw_content:
+            if isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "\n".join(parts).strip()
+
+    refusal = message.get("refusal")
+    if isinstance(refusal, str):
+        return refusal.strip()
+
+    return ""
