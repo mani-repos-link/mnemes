@@ -56,11 +56,30 @@ CREATE TABLE IF NOT EXISTS memory_items (
   FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS tool_calls (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  tool_name TEXT NOT NULL,
+  arguments TEXT NOT NULL,
+  result TEXT,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'running', 'completed', 'error')),
+  error TEXT,
+  created_at TEXT NOT NULL,
+  started_at TEXT,
+  completed_at TEXT,
+  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_session_created_at ON messages(session_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_memory_items_session_source ON memory_items(session_id, source_type, source_id);
 CREATE INDEX IF NOT EXISTS idx_memory_items_embedding_meta
   ON memory_items(session_id, embedding_provider, embedding_model, embedding_dim);
+CREATE INDEX IF NOT EXISTS idx_tool_calls_message ON tool_calls(message_id);
+CREATE INDEX IF NOT EXISTS idx_tool_calls_session_status ON tool_calls(session_id, status);
 """
 
 

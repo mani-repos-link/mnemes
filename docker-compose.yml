@@ -1,0 +1,33 @@
+services:
+  pyapi:
+    build:
+      context: .
+      dockerfile: apps/pyapi/Dockerfile
+    container_name: mnemes-pyapi
+    volumes:
+      - mnemes-data:/data
+    ports:
+      - "${PYAPI_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-/api}"
+    container_name: mnemes-web
+    depends_on:
+      pyapi:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    restart: unless-stopped
+
+volumes:
+  mnemes-data:

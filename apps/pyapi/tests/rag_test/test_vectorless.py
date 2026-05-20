@@ -1,5 +1,5 @@
 from pyapi.context import build_llm_context, messages_for_memory_index_update
-from pyapi.routers.memory import index_messages_for_vectorless_retrieval, retrieve_vectorless_memories
+from pyapi.services.memory import index_messages_for_vectorless_retrieval, retrieve_vectorless_memories
 
 from .helpers import StoreRagTestCase, context_config, create_user_messages
 

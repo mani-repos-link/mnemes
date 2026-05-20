@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable
 
 from pyapi.context import build_llm_context
+from pyapi.dependencies import AppServices
 from pyapi.providers import MODEL_EMPTY_RESPONSE_MESSAGE, ChatResult, EmptyModelResponseError
 from pyapi.store import MessageRecord, NotFoundError
 
-from .dependencies import RouterServices
 from .memory import indexed_memory_source_ids_for_context, index_messages_for_retrieval, retrieve_memories_for_message
-from .summaries import update_summary_if_needed
+from .summary import update_summary_if_needed
 from .titles import title_session_from_first_prompt
 
 
@@ -21,7 +21,7 @@ class AssistantResponseResult:
 
 
 async def answer_user_message(
-    services: RouterServices,
+    services: AppServices,
     session_id: str,
     user_message: MessageRecord,
     *,
@@ -36,7 +36,7 @@ async def answer_user_message(
 
 
 async def regenerate_assistant_response(
-    services: RouterServices,
+    services: AppServices,
     session_id: str,
     message_id: str,
 ) -> AssistantResponseResult:
@@ -47,7 +47,7 @@ async def regenerate_assistant_response(
 
 
 async def create_assistant_response(
-    services: RouterServices,
+    services: AppServices,
     session_id: str,
     user_message: MessageRecord,
     context_messages: list[MessageRecord],
@@ -93,7 +93,7 @@ async def create_assistant_response(
 
 
 async def run_post_response_maintenance(
-    services: RouterServices,
+    services: AppServices,
     session_id: str,
     user_message: MessageRecord,
     assistant_message: MessageRecord,
@@ -117,7 +117,7 @@ async def run_post_response_maintenance(
 
 
 async def complete_with_fallback(
-    services: RouterServices,
+    services: AppServices,
     history: list[MessageRecord],
 ) -> ChatResult:
     try:

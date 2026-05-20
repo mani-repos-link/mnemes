@@ -8,7 +8,7 @@ from pyapi.store import Store
 
 
 @dataclass(frozen=True)
-class RouterServices:
+class AppServices:
     store: Store
     chat_provider: ChatProvider
     embedding_provider: EmbeddingProvider

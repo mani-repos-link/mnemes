@@ -6,7 +6,10 @@ from pyapi.config import ContextConfig
 from pyapi.providers import ChatProvider, EmbeddingProvider
 from pyapi.store import Store
 
-from .dependencies import RouterServices
+from pyapi.dependencies import AppServices
+
+from .messages import create_messages_router
+from .metrics import create_metrics_router
 from .sessions import create_sessions_router
 
 
@@ -16,7 +19,7 @@ def create_router(
     embedding_provider: EmbeddingProvider,
     context: ContextConfig,
 ) -> APIRouter:
-    services = RouterServices(
+    services = AppServices(
         store=store,
         chat_provider=chat_provider,
         embedding_provider=embedding_provider,
@@ -41,6 +44,8 @@ def create_router(
         }
 
     router.include_router(create_sessions_router(services))
+    router.include_router(create_messages_router(services))
+    router.include_router(create_metrics_router(services))
     return router
 
 
