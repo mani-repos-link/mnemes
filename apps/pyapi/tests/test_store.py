@@ -9,6 +9,17 @@ from pyapi.context import build_llm_context, messages_for_memory_index_update, m
 
 
 class StoreTest(unittest.TestCase):
+    def context_config(self, memory_mode: str) -> ContextConfig:
+        return ContextConfig(
+            memory_mode=memory_mode,
+            context_memory_trigger_message_limit=4,
+            context_memory_buffer_message_limit=3,
+            retrieval_top_k=2,
+            retrieval_min_score=0.2,
+            memory_max_chars=4000,
+            max_response_tokens=100,
+        )
+
     def test_session_and_message_lifecycle(self) -> None:
         with TemporaryDirectory() as directory:
             store = Store(f"file:{Path(directory) / 'test.sqlite'}")
@@ -87,15 +98,7 @@ class StoreTest(unittest.TestCase):
                 store.create_message(session.id, "user", content)
                 time.sleep(0.001)
 
-            context = ContextConfig(
-                memory_mode="summary",
-                context_memory_trigger_message_limit=4,
-                context_memory_buffer_message_limit=3,
-                retrieval_top_k=2,
-                retrieval_min_score=0.2,
-                memory_max_chars=4000,
-                max_response_tokens=100,
-            )
+            context = self.context_config("summary")
             messages = store.list_context_messages(session.id)
             to_summarize = messages_for_summary_update(messages, None, context)
             self.assertEqual([message.content for message in to_summarize], ["one", "two", "three"])
@@ -121,15 +124,7 @@ class StoreTest(unittest.TestCase):
                 store.create_message(session.id, "user", content)
                 time.sleep(0.001)
 
-            context = ContextConfig(
-                memory_mode="rag-vectorless",
-                context_memory_trigger_message_limit=4,
-                context_memory_buffer_message_limit=3,
-                retrieval_top_k=2,
-                retrieval_min_score=0.2,
-                memory_max_chars=4000,
-                max_response_tokens=100,
-            )
+            context = self.context_config("rag-vectorless")
             messages = store.list_context_messages(session.id)
 
             self.assertEqual(
@@ -160,6 +155,48 @@ class StoreTest(unittest.TestCase):
                 [message.content for message in build_llm_context(messages, None, context, indexed_memory_source_ids=indexed_source_ids)],
                 ["four", "five", "six", "seven"],
             )
+            store.close()
+
+    def test_context_modes_select_expected_raw_messages(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = Store(f"file:{Path(directory) / 'test.sqlite'}")
+            session = store.create_session("Test")
+
+            for content in ["one", "two", "three", "four", "five", "six", "seven"]:
+                store.create_message(session.id, "user", content)
+                time.sleep(0.001)
+
+            messages = store.list_context_messages(session.id)
+
+            none_context = self.context_config("none")
+            self.assertEqual(
+                [message.content for message in build_llm_context(messages, None, none_context)],
+                ["four", "five", "six", "seven"],
+            )
+
+            summary_context = self.context_config("summary")
+            summary = store.upsert_session_summary(session.id, "Earlier messages one through three.", messages[2].id)
+            self.assertEqual(
+                [message.role for message in build_llm_context(messages, summary, summary_context)],
+                ["system", "user", "user", "user", "user"],
+            )
+            self.assertEqual(
+                [message.content for message in build_llm_context(messages, summary, summary_context)[1:]],
+                ["four", "five", "six", "seven"],
+            )
+
+            rag_context = self.context_config("rag-vectorless")
+            indexed_ids = {message.id for message in messages[:3]}
+            self.assertEqual(
+                [message.content for message in build_llm_context(messages, None, rag_context, indexed_memory_source_ids=indexed_ids)],
+                ["four", "five", "six", "seven"],
+            )
+
+            memory = store.upsert_text_memory_item(session.id, "message", messages[0].id, "User: one")
+            context_with_memory = build_llm_context(messages, None, rag_context, [memory], indexed_ids)
+            self.assertEqual(context_with_memory[0].role, "system")
+            self.assertIn("Relevant retrieved memory", context_with_memory[0].content)
+            self.assertEqual([message.content for message in context_with_memory[1:]], ["four", "five", "six", "seven"])
             store.close()
 
     def test_memory_vectors_are_searched_by_similarity(self) -> None:
