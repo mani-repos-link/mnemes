@@ -13,6 +13,7 @@ def execute_tool_call(config: ToolConfig, request: ToolRequest, current_session_
     if not config.enabled:
         return ToolExecutionResult(request.tool, False, "Tools are disabled.")
 
+    # note: to replace this mess with command pattern and improve registry. even further clean use with adapter.
     try:
         if request.tool == "ls":
             output = run_ls(config, request.arguments)

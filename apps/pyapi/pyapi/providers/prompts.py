@@ -88,14 +88,16 @@ TOOL_PROTOCOL_PROMPT = """Tool protocol:
 
 
 def assistant_system_prompt(tools_enabled: bool, internet_tools_enabled: bool = False) -> str:
+    base_prompt = BASE_ASSISTANT_PROMPT +  "\nToday is " + __import__("datetime").datetime.now().strftime("%Y-%m-%d") + ".\n"
+
     if tools_enabled and internet_tools_enabled:
         return (
-            f"{BASE_ASSISTANT_PROMPT}\n"
+            f"{base_prompt}\n"
             f"{LOCAL_FILE_CAPABILITY_PROMPT}\n"
             f"{DATA_MEMORY_CAPABILITY_PROMPT}\n"
             f"{WEB_SURFING_CAPABILITY_PROMPT}\n"
             f"{TOOL_PROTOCOL_PROMPT}"
         ).strip()
     if tools_enabled:
-        return f"{BASE_ASSISTANT_PROMPT}\n{LOCAL_FILE_CAPABILITY_PROMPT}\n{DATA_MEMORY_CAPABILITY_PROMPT}\n{TOOL_PROTOCOL_PROMPT}".strip()
-    return BASE_ASSISTANT_PROMPT.strip()
+        return f"{base_prompt}\n{LOCAL_FILE_CAPABILITY_PROMPT}\n{DATA_MEMORY_CAPABILITY_PROMPT}\n{TOOL_PROTOCOL_PROMPT}".strip()
+    return base_prompt.strip()
