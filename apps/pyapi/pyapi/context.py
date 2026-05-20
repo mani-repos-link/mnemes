@@ -9,11 +9,9 @@ def build_llm_context(
     summary: SessionSummaryRecord | None,
     config: ContextConfig,
     memories: list[MemoryItemRecord] | None = None,
+    indexed_memory_source_ids: set[str] | None = None,
 ) -> list[MessageRecord]:
-    if summary is None and config.enable_summaries and len(messages) <= config.summary_trigger_message_limit:
-        recent_messages = messages
-    else:
-        recent_messages = messages[-config.recent_message_limit :]
+    recent_messages = select_raw_context_messages(messages, summary, config, indexed_memory_source_ids)
     system_messages: list[MessageRecord] = []
 
     if summary is not None:
@@ -57,6 +55,26 @@ def build_llm_context(
     return [*system_messages, *recent_messages]
 
 
+def select_raw_context_messages(
+    messages: list[MessageRecord],
+    summary: SessionSummaryRecord | None,
+    config: ContextConfig,
+    indexed_memory_source_ids: set[str] | None = None,
+) -> list[MessageRecord]:
+    raw_limit = context_memory_raw_limit(config)
+
+    if summary is not None:
+        return messages_after(messages, summary.covered_message_id)
+
+    if indexed_memory_source_ids is not None:
+        return messages_after_indexed_prefix(messages, indexed_memory_source_ids)
+
+    if config.memory_mode in {"summary", "rag-vector", "rag-vectorless"}:
+        return messages
+
+    return messages[-raw_limit:]
+
+
 def format_retrieved_memories(memories: list[MemoryItemRecord], config: ContextConfig) -> str:
     blocks: list[str] = []
     for index, memory in enumerate(memories, start=1):
@@ -86,15 +104,45 @@ def messages_for_summary_update(
     summary: SessionSummaryRecord | None,
     config: ContextConfig,
 ) -> list[MessageRecord]:
-    if len(messages) < config.summary_trigger_message_limit:
-        return []
-
+    raw_limit = context_memory_raw_limit(config)
     covered_message_id = summary.covered_message_id if summary else None
     unsummarized = messages_after(messages, covered_message_id)
-    if len(unsummarized) <= config.summary_keep_recent_messages:
+    overflow = len(unsummarized) - raw_limit
+    if overflow < context_memory_buffer_limit(config):
         return []
 
-    return unsummarized[: -config.summary_keep_recent_messages]
+    return unsummarized[:-raw_limit]
+
+
+def messages_for_memory_index_update(
+    messages: list[MessageRecord],
+    indexed_source_ids: set[str],
+    config: ContextConfig,
+) -> list[MessageRecord]:
+    raw_limit = context_memory_raw_limit(config)
+    compactable_messages = [message for message in messages[:-raw_limit] if message.role in {"user", "assistant"}]
+    pending_messages = [message for message in compactable_messages if message.id not in indexed_source_ids]
+    if len(pending_messages) < context_memory_buffer_limit(config):
+        return []
+    return pending_messages
+
+
+def messages_after_indexed_prefix(messages: list[MessageRecord], indexed_source_ids: set[str]) -> list[MessageRecord]:
+    prefix_end = -1
+    for index, message in enumerate(messages):
+        if message.role in {"user", "assistant"} and message.id not in indexed_source_ids:
+            break
+        prefix_end = index
+
+    return messages[prefix_end + 1 :]
+
+
+def context_memory_raw_limit(config: ContextConfig) -> int:
+    return max(1, config.context_memory_trigger_message_limit)
+
+
+def context_memory_buffer_limit(config: ContextConfig) -> int:
+    return max(1, config.context_memory_buffer_message_limit)
 
 
 def messages_after(messages: list[MessageRecord], message_id: str | None) -> list[MessageRecord]:

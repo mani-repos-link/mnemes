@@ -5,7 +5,7 @@ import unittest
 
 from pyapi.store import Store
 from pyapi.config import ContextConfig
-from pyapi.context import messages_for_summary_update
+from pyapi.context import build_llm_context, messages_for_memory_index_update, messages_for_summary_update
 
 
 class StoreTest(unittest.TestCase):
@@ -83,18 +83,17 @@ class StoreTest(unittest.TestCase):
             store = Store(f"file:{Path(directory) / 'test.sqlite'}")
             session = store.create_session("Test")
 
-            for content in ["one", "two", "three", "four", "five"]:
+            for content in ["one", "two", "three", "four", "five", "six", "seven"]:
                 store.create_message(session.id, "user", content)
                 time.sleep(0.001)
 
             context = ContextConfig(
                 memory_mode="summary",
-                recent_message_limit=3,
+                context_memory_trigger_message_limit=4,
+                context_memory_buffer_message_limit=3,
                 retrieval_top_k=2,
                 retrieval_min_score=0.2,
                 memory_max_chars=4000,
-                summary_keep_recent_messages=2,
-                summary_trigger_message_limit=4,
                 max_response_tokens=100,
             )
             messages = store.list_context_messages(session.id)
@@ -111,6 +110,56 @@ class StoreTest(unittest.TestCase):
 
             to_summarize = messages_for_summary_update(messages, summary, context)
             self.assertEqual(to_summarize, [])
+            store.close()
+
+    def test_rag_context_keeps_full_history_until_memory_trigger(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = Store(f"file:{Path(directory) / 'test.sqlite'}")
+            session = store.create_session("Test")
+
+            for content in ["one", "two", "three", "four"]:
+                store.create_message(session.id, "user", content)
+                time.sleep(0.001)
+
+            context = ContextConfig(
+                memory_mode="rag-vectorless",
+                context_memory_trigger_message_limit=4,
+                context_memory_buffer_message_limit=3,
+                retrieval_top_k=2,
+                retrieval_min_score=0.2,
+                memory_max_chars=4000,
+                max_response_tokens=100,
+            )
+            messages = store.list_context_messages(session.id)
+
+            self.assertEqual(
+                [message.content for message in build_llm_context(messages, None, context)],
+                ["one", "two", "three", "four"],
+            )
+
+            store.create_message(session.id, "user", "five")
+            messages = store.list_context_messages(session.id)
+            self.assertEqual(
+                [message.content for message in build_llm_context(messages, None, context)],
+                ["one", "two", "three", "four", "five"],
+            )
+
+            store.create_message(session.id, "user", "six")
+            messages = store.list_context_messages(session.id)
+            self.assertEqual(messages_for_memory_index_update(messages, set(), context), [])
+
+            store.create_message(session.id, "user", "seven")
+            messages = store.list_context_messages(session.id)
+            self.assertEqual(
+                [message.content for message in messages_for_memory_index_update(messages, set(), context)],
+                ["one", "two", "three"],
+            )
+
+            indexed_source_ids = {message.id for message in messages[:3]}
+            self.assertEqual(
+                [message.content for message in build_llm_context(messages, None, context, indexed_memory_source_ids=indexed_source_ids)],
+                ["four", "five", "six", "seven"],
+            )
             store.close()
 
     def test_memory_vectors_are_searched_by_similarity(self) -> None:
@@ -160,6 +209,32 @@ class StoreTest(unittest.TestCase):
                 ),
                 {first.id, second.id},
             )
+            store.close()
+
+    def test_text_memory_uses_vectorless_search(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = Store(f"file:{Path(directory) / 'test.sqlite'}")
+            session = store.create_session("Test")
+            first = store.create_message(session.id, "user", "I am building a chatbot with SQLite FTS")
+            second = store.create_message(session.id, "assistant", "The weather is sunny")
+
+            store.upsert_text_memory_item(
+                session.id,
+                "message",
+                first.id,
+                "User: I am building a chatbot with SQLite FTS",
+            )
+            store.upsert_text_memory_item(
+                session.id,
+                "message",
+                second.id,
+                "Assistant: The weather is sunny",
+            )
+
+            memories = store.search_text_memory_items(session.id, "sqlite chatbot search", limit=2)
+
+            self.assertTrue(store.has_text_memory(session.id))
+            self.assertEqual(memories[0].source_id, first.id)
             store.close()
 
 

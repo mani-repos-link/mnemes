@@ -32,12 +32,11 @@ class EmbeddingConfig:
 @dataclass(frozen=True)
 class ContextConfig:
     memory_mode: str
-    recent_message_limit: int
+    context_memory_trigger_message_limit: int
+    context_memory_buffer_message_limit: int
     retrieval_top_k: int
     retrieval_min_score: float
     memory_max_chars: int
-    summary_keep_recent_messages: int
-    summary_trigger_message_limit: int
     max_response_tokens: int
 
     @property
@@ -78,7 +77,6 @@ def load_config() -> Config:
     provider = env("DEFAULT_CHAT_PROVIDER", "openrouter").lower()
     embedding_provider = env("DEFAULT_EMBEDDING_PROVIDER", provider).lower()
     memory_mode = context_memory_mode()
-    recent_message_limit = int_env("RECENT_MESSAGE_LIMIT", 3)
 
     return Config(
         addr=env("APP_ADDR", ":8080"),
@@ -106,12 +104,11 @@ def load_config() -> Config:
         ),
         context=ContextConfig(
             memory_mode=memory_mode,
-            recent_message_limit=recent_message_limit,
+            context_memory_trigger_message_limit=int_env("CONTEXT_MEMORY_TRIGGER_MESSAGE_LIMIT", 24),
+            context_memory_buffer_message_limit=max(1, int_env("CONTEXT_MEMORY_BUFFER_MESSAGE_LIMIT", 6)),
             retrieval_top_k=int_env("RETRIEVAL_TOP_K", 5),
             retrieval_min_score=float_env("RETRIEVAL_MIN_SCORE", 0.2),
             memory_max_chars=int_env("MEMORY_MAX_CHARS", 4000),
-            summary_keep_recent_messages=int_env("SUMMARY_KEEP_RECENT_MESSAGES", recent_message_limit),
-            summary_trigger_message_limit=int_env("SUMMARY_TRIGGER_MESSAGE_LIMIT", 24),
             max_response_tokens=int_env("MAX_RESPONSE_TOKENS", 2000),
         ),
     )

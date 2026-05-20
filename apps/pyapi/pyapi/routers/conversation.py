@@ -8,7 +8,7 @@ from pyapi.providers import MODEL_EMPTY_RESPONSE_MESSAGE, ChatResult, EmptyModel
 from pyapi.store import MessageRecord, NotFoundError
 
 from .dependencies import RouterServices
-from .memory import index_messages_for_retrieval, retrieve_memories_for_message
+from .memory import indexed_memory_source_ids_for_context, index_messages_for_retrieval, retrieve_memories_for_message
 from .summaries import update_summary_if_needed
 from .titles import title_session_from_first_prompt
 
@@ -53,11 +53,18 @@ async def create_assistant_response(
     context_messages: list[MessageRecord],
 ) -> AssistantResponseResult:
     store = services.store
+    indexed_memory_source_ids = indexed_memory_source_ids_for_context(
+        store,
+        services.embedding_provider,
+        services.context,
+        context_messages,
+    )
     memories = await retrieve_memories_for_message(
         store,
         services.embedding_provider,
         services.context,
         user_message,
+        context_message_count=len(context_messages),
         exclude_source_ids={user_message.id},
     )
     summary = store.get_session_summary(session_id) if services.context.enable_summaries else None
@@ -66,6 +73,7 @@ async def create_assistant_response(
         summary,
         services.context,
         memories,
+        indexed_memory_source_ids,
     )
     result = await complete_with_fallback(services, history)
     assistant_message = store.create_message(
@@ -91,12 +99,13 @@ async def run_post_response_maintenance(
     assistant_message: MessageRecord,
 ) -> None:
     store = services.store
-    if services.context.enable_retrieval:
+    if services.context.enable_retrieval or services.context.enable_vectorless_retrieval:
+        context_messages = store.list_context_messages(session_id)
         await index_messages_for_retrieval(
             store,
             services.embedding_provider,
             services.context,
-            [user_message, assistant_message],
+            context_messages,
         )
     if services.context.enable_summaries:
         await update_summary_if_needed(

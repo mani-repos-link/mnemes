@@ -22,7 +22,7 @@ def localhost_origin_regex() -> str:
 config = load_config()
 logger = logging.getLogger("pyapi")
 logger.info(
-    "config loaded addr=%s database=%s chat_provider=%s chat_model=%s embedding_provider=%s embedding_model=%s openrouter_base_url=%s openrouter_key=%s huggingface_base_url=%s huggingface_key=%s frontend_origins=%s memory_mode=%s recent_limit=%d retrieval_top_k=%d max_response_tokens=%d",
+    "config loaded addr=%s database=%s chat_provider=%s chat_model=%s embedding_provider=%s embedding_model=%s openrouter_base_url=%s openrouter_key=%s huggingface_base_url=%s huggingface_key=%s frontend_origins=%s memory_mode=%s memory_trigger_limit=%d memory_buffer_limit=%d retrieval_top_k=%d max_response_tokens=%d",
     config.addr,
     config.database_url,
     config.chat.provider,
@@ -35,7 +35,8 @@ logger.info(
     redacted_key(config.chat.huggingface_api_key),
     ",".join(config.frontend_origins),
     config.context.memory_mode,
-    config.context.recent_message_limit,
+    config.context.context_memory_trigger_message_limit,
+    config.context.context_memory_buffer_message_limit,
     config.context.retrieval_top_k,
     config.context.max_response_tokens,
 )
