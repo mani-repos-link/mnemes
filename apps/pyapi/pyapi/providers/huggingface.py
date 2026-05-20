@@ -12,4 +12,6 @@ class HuggingFaceProvider(OpenAICompatibleProvider):
             base_url=config.huggingface_base_url,
             api_key=config.huggingface_api_key,
             model=config.model,
+            http_referer=config.http_referer,
+            app_title=config.app_title,
         )

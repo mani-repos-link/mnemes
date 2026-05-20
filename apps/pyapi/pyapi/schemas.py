@@ -24,6 +24,10 @@ class CreateSessionRequest(BaseModel):
     title: str = "New chat"
 
 
+class UpdateSessionRequest(BaseModel):
+    title: str
+
+
 class CreateMessageRequest(BaseModel):
     role: str
     content: str

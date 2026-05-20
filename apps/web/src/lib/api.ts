@@ -1,4 +1,4 @@
-import type { Message, Session } from "../types/chat";
+import type { ChatMetrics, Message, Session } from "../types/chat";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 
@@ -21,6 +21,13 @@ export async function createSession(title = "New chat") {
 export async function deleteSession(sessionId: string) {
   return request<void>(`/api/sessions/${sessionId}`, {
     method: "DELETE",
+  });
+}
+
+export async function updateSessionTitle(sessionId: string, title: string) {
+  return request<{ session: Session }>(`/api/sessions/${sessionId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ title }),
   });
 }
 
@@ -65,6 +72,16 @@ export async function activateMessage(sessionId: string, messageId: string) {
       method: "POST",
     },
   );
+}
+
+export async function getSessionMetrics(sessionId: string) {
+  return request<ChatMetrics>(`/api/sessions/${sessionId}/metrics`);
+}
+
+export async function generateSessionMemory(sessionId: string) {
+  return request<ChatMetrics>(`/api/sessions/${sessionId}/metrics/generate`, {
+    method: "POST",
+  });
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

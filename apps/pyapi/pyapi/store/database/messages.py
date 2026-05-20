@@ -1,119 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
-import sqlite3
-from threading import RLock
-
-from .errors import NotFoundError
-from .ids import new_id, timestamp
-from .models import MessageRecord, SessionRecord
+from ..errors import NotFoundError
+from ..ids import new_id, timestamp
+from ..models import MessageRecord
+from .rows import message_from_row
 
 
-class Store:
-    def __init__(self, database_url: str):
-        ensure_sqlite_dir(database_url)
-        self._db = sqlite3.connect(database_url, uri=database_url.startswith("file:"), check_same_thread=False)
-        self._db.row_factory = sqlite3.Row
-        self._lock = RLock()
-        self.migrate()
-
-    def close(self) -> None:
-        self._db.close()
-
-    def migrate(self) -> None:
-        with self._lock, self._db:
-            self._db.executescript(
-                """
-                PRAGMA foreign_keys = ON;
-
-                CREATE TABLE IF NOT EXISTS sessions (
-                  id TEXT PRIMARY KEY,
-                  title TEXT NOT NULL,
-                  created_at TEXT NOT NULL,
-                  updated_at TEXT NOT NULL,
-                  archived_at TEXT
-                );
-
-                CREATE TABLE IF NOT EXISTS messages (
-                  id TEXT PRIMARY KEY,
-                  session_id TEXT NOT NULL,
-                  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
-                  content TEXT NOT NULL,
-                  provider TEXT,
-                  model TEXT,
-                  parent_message_id TEXT,
-                  active_response_id TEXT,
-                  token_count INTEGER,
-                  created_at TEXT NOT NULL,
-                  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
-                  FOREIGN KEY (parent_message_id) REFERENCES messages(id) ON DELETE SET NULL,
-                  FOREIGN KEY (active_response_id) REFERENCES messages(id) ON DELETE SET NULL
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC);
-                CREATE INDEX IF NOT EXISTS idx_messages_session_created_at ON messages(session_id, created_at ASC);
-                """
-            )
-            self._ensure_message_branch_columns()
-            self._db.execute("CREATE INDEX IF NOT EXISTS idx_messages_parent_message_id ON messages(parent_message_id)")
-            self._backfill_message_branches()
-
-    def list_sessions(self) -> list[SessionRecord]:
-        rows = self._query_all(
-            """
-            SELECT id, title, created_at, updated_at
-            FROM sessions
-            WHERE archived_at IS NULL
-            ORDER BY updated_at DESC
-            """
-        )
-        return [session_from_row(row) for row in rows]
-
-    def create_session(self, title: str) -> SessionRecord:
-        now = timestamp()
-        session = SessionRecord(
-            id=new_id("ses"),
-            title=title.strip() or "New chat",
-            created_at=now,
-            updated_at=now,
-        )
-        with self._lock, self._db:
-            self._db.execute(
-                """
-                INSERT INTO sessions (id, title, created_at, updated_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (session.id, session.title, session.created_at, session.updated_at),
-            )
-        return session
-
-    def get_session(self, session_id: str) -> SessionRecord:
-        row = self._query_one(
-            """
-            SELECT id, title, created_at, updated_at
-            FROM sessions
-            WHERE id = ? AND archived_at IS NULL
-            """,
-            (session_id,),
-        )
-        if row is None:
-            raise NotFoundError("session not found")
-        return session_from_row(row)
-
-    def delete_session(self, session_id: str) -> None:
-        now = timestamp()
-        with self._lock, self._db:
-            cursor = self._db.execute(
-                """
-                UPDATE sessions
-                SET archived_at = ?, updated_at = ?
-                WHERE id = ? AND archived_at IS NULL
-                """,
-                (now, now, session_id),
-            )
-        if cursor.rowcount == 0:
-            raise NotFoundError("session not found")
-
+class MessageStoreMixin:
     def list_messages(self, session_id: str) -> list[MessageRecord]:
         self.get_session(session_id)
         rows = self._query_all(
@@ -305,10 +198,7 @@ class Store:
         return message_from_row(assistant)
 
     def _ensure_message_branch_columns(self) -> None:
-        columns = {
-            row["name"]
-            for row in self._db.execute("PRAGMA table_info(messages)").fetchall()
-        }
+        columns = {row["name"] for row in self._db.execute("PRAGMA table_info(messages)").fetchall()}
         if "parent_message_id" not in columns:
             self._db.execute("ALTER TABLE messages ADD COLUMN parent_message_id TEXT")
         if "active_response_id" not in columns:
@@ -354,47 +244,3 @@ class Store:
                 """,
                 (assistant_id, user_id),
             )
-
-    def _query_one(self, query: str, params: tuple[object, ...] = ()) -> sqlite3.Row | None:
-        with self._lock:
-            return self._db.execute(query, params).fetchone()
-
-    def _query_all(self, query: str, params: tuple[object, ...] = ()) -> list[sqlite3.Row]:
-        with self._lock:
-            return list(self._db.execute(query, params).fetchall())
-
-
-def session_from_row(row: sqlite3.Row) -> SessionRecord:
-    return SessionRecord(
-        id=row["id"],
-        title=row["title"],
-        created_at=row["created_at"],
-        updated_at=row["updated_at"],
-    )
-
-
-def message_from_row(row: sqlite3.Row) -> MessageRecord:
-    return MessageRecord(
-        id=row["id"],
-        session_id=row["session_id"],
-        role=row["role"],
-        content=row["content"],
-        provider=row["provider"],
-        model=row["model"],
-        parent_message_id=row["parent_message_id"],
-        active_response_id=row["active_response_id"],
-        created_at=row["created_at"],
-    )
-
-
-def ensure_sqlite_dir(database_url: str) -> None:
-    if not database_url.startswith("file:"):
-        return
-
-    path = database_url.removeprefix("file:").split("?", 1)[0]
-    if not path or path == ":memory:":
-        return
-
-    directory = Path(path).parent
-    if str(directory) not in {"", "."}:
-        directory.mkdir(parents=True, exist_ok=True)
