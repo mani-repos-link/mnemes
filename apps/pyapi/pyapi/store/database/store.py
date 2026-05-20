@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from threading import RLock
 
+from .diagnostics import DiagnosticsStoreMixin
 from .memory_text import TextMemoryStoreMixin
 from .memory_vector import VectorMemoryStoreMixin, sqlite_cosine_similarity
 from .messages import MessageStoreMixin
@@ -17,6 +18,7 @@ class Store(
     SummaryStoreMixin,
     VectorMemoryStoreMixin,
     TextMemoryStoreMixin,
+    DiagnosticsStoreMixin,
 ):
     def __init__(self, database_url: str):
         ensure_sqlite_dir(database_url)

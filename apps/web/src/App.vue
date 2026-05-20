@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import ChatComposer from "./components/chat/ChatComposer.vue";
 import ChatHeader from "./components/chat/ChatHeader.vue";
+import ChatMetricsPage from "./components/chat/ChatMetricsPage.vue";
 import ChatSidebar from "./components/chat/ChatSidebar.vue";
 import MessageList from "./components/chat/MessageList.vue";
 import { useChat } from "./composables/useChat";
@@ -10,18 +11,35 @@ import { useTheme } from "./composables/useTheme";
 const chat = useChat();
 const theme = useTheme();
 const sidebarCollapsed = ref(false);
+const metricsSessionId = ref(metricsSessionIdFromPath());
 
 onMounted(() => {
   sidebarCollapsed.value = localStorage.getItem("mnemes.sidebar.collapsed") === "true";
+  window.addEventListener("popstate", updateMetricsRoute);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("popstate", updateMetricsRoute);
 });
 
 watch(sidebarCollapsed, (collapsed) => {
   localStorage.setItem("mnemes.sidebar.collapsed", String(collapsed));
 });
+
+function updateMetricsRoute() {
+  metricsSessionId.value = metricsSessionIdFromPath();
+}
+
+function metricsSessionIdFromPath() {
+  const match = window.location.pathname.match(/^\/s\/([^/]+)\/metrics\/?$/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
 </script>
 
 <template>
+  <ChatMetricsPage v-if="metricsSessionId" :session-id="metricsSessionId" />
   <main
+    v-else
     class="grid min-h-svh bg-shell text-ink md:h-svh md:overflow-hidden"
     :class="
       sidebarCollapsed ? 'md:grid-cols-[64px_minmax(0,1fr)]' : 'md:grid-cols-[300px_minmax(0,1fr)]'

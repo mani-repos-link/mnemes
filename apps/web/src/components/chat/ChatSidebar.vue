@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  BarChart3,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -100,6 +101,10 @@ function loadMoreSessions() {
   visibleSessionCount.value = Math.min(visibleSessionCount.value + 40, props.sessions.length);
 }
 
+function openMetrics(session: Session) {
+  window.open(`/s/${encodeURIComponent(session.id)}/metrics`, "_blank", "noopener");
+}
+
 function handleSessionScroll(event: Event) {
   if (!hasMoreSessions.value) {
     return;
@@ -190,6 +195,10 @@ function handleSessionScroll(event: Event) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem @select="openMetrics(session)">
+              <BarChart3 />
+              See tree-graph conversation
+            </DropdownMenuItem>
             <DropdownMenuItem @select="requestRename(session)">
               <Pencil />
               Rename
