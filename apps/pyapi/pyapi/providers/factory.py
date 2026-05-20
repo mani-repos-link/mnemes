@@ -20,5 +20,5 @@ class UnsupportedProvider:
         self.provider = provider
         self.model = ""
 
-    async def complete(self, *_object: object) -> ChatResult:
+    async def complete(self, *_object: object, **_kwargs: object) -> ChatResult:
         raise ValueError(f'unsupported chat provider "{self.provider}"')

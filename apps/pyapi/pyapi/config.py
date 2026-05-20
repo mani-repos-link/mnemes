@@ -53,6 +53,23 @@ class ContextConfig:
 
 
 @dataclass(frozen=True)
+class ToolConfig:
+    enabled: bool
+    database_url: str
+    workspace_root: Path
+    max_iterations: int
+    max_output_chars: int
+    internet_enabled: bool
+    network_timeout_seconds: float
+    max_network_bytes: int
+    crawl_max_pages: int
+    memory_mode: str
+    context_memory_trigger_message_limit: int
+    context_memory_buffer_message_limit: int
+    retrieval_top_k: int
+
+
+@dataclass(frozen=True)
 class Config:
     addr: str
     database_url: str
@@ -60,6 +77,7 @@ class Config:
     chat: ChatConfig
     embedding: EmbeddingConfig
     context: ContextConfig
+    tools: ToolConfig
 
     @property
     def host(self) -> str:
@@ -73,10 +91,11 @@ class Config:
 
 
 def load_config() -> Config:
-    load_dotenv_upwards()
+    dotenv_path = load_dotenv_upwards()
     provider = env("DEFAULT_CHAT_PROVIDER", "openrouter").lower()
     embedding_provider = env("DEFAULT_EMBEDDING_PROVIDER", provider).lower()
     memory_mode = context_memory_mode()
+    workspace_root = resolve_path_env("TOOL_WORKSPACE_ROOT", "../..", dotenv_path.parent if dotenv_path else Path.cwd())
 
     return Config(
         addr=env("APP_ADDR", ":8080"),
@@ -110,6 +129,21 @@ def load_config() -> Config:
             retrieval_min_score=float_env("RETRIEVAL_MIN_SCORE", 0.2),
             memory_max_chars=int_env("MEMORY_MAX_CHARS", 4000),
             max_response_tokens=int_env("MAX_RESPONSE_TOKENS", 2000),
+        ),
+        tools=ToolConfig(
+            enabled=bool_env("TOOLS_ENABLED", False),
+            database_url=env("DATABASE_URL", "file:../../data/chatbot.sqlite"),
+            workspace_root=workspace_root,
+            max_iterations=max(1, int_env("MAX_TOOL_ITERATIONS", 3)),
+            max_output_chars=max(1000, int_env("MAX_TOOL_OUTPUT_CHARS", 12000)),
+            internet_enabled=bool_env("INTERNET_TOOLS_ENABLED", False),
+            network_timeout_seconds=max(1.0, float_env("TOOL_NETWORK_TIMEOUT_SECONDS", 10.0)),
+            max_network_bytes=max(1000, int_env("MAX_TOOL_NETWORK_BYTES", 300000)),
+            crawl_max_pages=max(1, int_env("TOOL_CRAWL_MAX_PAGES", 5)),
+            memory_mode=memory_mode,
+            context_memory_trigger_message_limit=int_env("CONTEXT_MEMORY_TRIGGER_MESSAGE_LIMIT", 24),
+            context_memory_buffer_message_limit=max(1, int_env("CONTEXT_MEMORY_BUFFER_MESSAGE_LIMIT", 6)),
+            retrieval_top_k=int_env("RETRIEVAL_TOP_K", 5),
         ),
     )
 
@@ -155,13 +189,14 @@ def provider_app_title() -> str:
     return env("PROVIDER_APP_TITLE", "Mnemes")
 
 
-def load_dotenv_upwards(filename: str = ".env") -> None:
+def load_dotenv_upwards(filename: str = ".env") -> Path | None:
     directory = Path.cwd()
     for path in [directory, *directory.parents]:
         dotenv = path / filename
         if dotenv.exists():
             load_dotenv(dotenv)
-            return
+            return dotenv
+    return None
 
 
 def load_dotenv(path: Path) -> None:
@@ -203,3 +238,11 @@ def bool_env(key: str, fallback: bool) -> bool:
     if not value:
         return fallback
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def resolve_path_env(key: str, fallback: str, base_dir: Path) -> Path:
+    raw_value = env(key, fallback)
+    path = Path(raw_value).expanduser()
+    if not path.is_absolute():
+        path = base_dir / path
+    return path.resolve()

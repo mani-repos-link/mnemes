@@ -10,6 +10,59 @@ from .rows import memory_from_row
 
 logger = logging.getLogger("pyapi.store")
 
+SEARCH_STOPWORDS = {
+    "about",
+    "also",
+    "and",
+    "any",
+    "are",
+    "can",
+    "could",
+    "did",
+    "does",
+    "do",
+    "for",
+    "from",
+    "give",
+    "got",
+    "had",
+    "has",
+    "have",
+    "how",
+    "into",
+    "is",
+    "it",
+    "its",
+    "just",
+    "like",
+    "me",
+    "more",
+    "now",
+    "of",
+    "ok",
+    "or",
+    "please",
+    "provide",
+    "should",
+    "that",
+    "the",
+    "them",
+    "there",
+    "this",
+    "think",
+    "to",
+    "use",
+    "was",
+    "were",
+    "what",
+    "when",
+    "why",
+    "with",
+    "would",
+    "you",
+    "your",
+}
+
 
 class TextMemoryStoreMixin:
     def upsert_text_memory_item(
@@ -252,7 +305,7 @@ def tokenize_search_query(query: str, max_terms: int = 12) -> list[str]:
     seen: set[str] = set()
     terms: list[str] = []
     for term in re.findall(r"[A-Za-z0-9_]+", query.lower()):
-        if len(term) < 2 or term in seen:
+        if len(term) < 3 or term in SEARCH_STOPWORDS or term in seen:
             continue
         seen.add(term)
         terms.append(term)

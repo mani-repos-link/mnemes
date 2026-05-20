@@ -7,6 +7,7 @@ import httpx
 
 from pyapi.store import MessageRecord
 
+from .prompts import assistant_system_prompt
 from .types import ChatResult, EmptyModelResponseError
 
 logger = logging.getLogger("pyapi.provider")
@@ -30,7 +31,10 @@ class OpenAICompatibleProvider:
         self.app_title = app_title
 
     async def complete(
-        self, history: list[MessageRecord], max_response_tokens: int
+        self,
+        history: list[MessageRecord],
+        max_response_tokens: int,
+        system_prompt: str | None = None,
     ) -> ChatResult:
         if not self.api_key:
             raise ValueError(f"{self.provider} API key is required")
@@ -38,7 +42,7 @@ class OpenAICompatibleProvider:
             raise ValueError(f"{self.provider} chat model is required")
 
         endpoint = f"{self.base_url}/chat/completions"
-        messages = build_messages(history)
+        messages = build_messages(history, system_prompt)
         body = {
             "model": self.model,
             "messages": messages,
@@ -104,15 +108,11 @@ class OpenAICompatibleProvider:
         )
 
 
-def build_messages(history: list[MessageRecord]) -> list[dict[str, str]]:
+def build_messages(history: list[MessageRecord], system_prompt: str | None = None) -> list[dict[str, str]]:
     messages = [
         {
             "role": "system",
-            "content": (
-                "You are a helpful assistant, chatbot. Answer clearly and concisely. "
-                "If the user's request is unclear, nonsensical, or cannot be processed, say so briefly "
-                "and ask them to rephrase instead of returning an empty answer."
-            ),
+            "content": system_prompt or assistant_system_prompt(False),
         }
     ]
     for message in history:

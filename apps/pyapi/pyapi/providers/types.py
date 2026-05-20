@@ -36,7 +36,12 @@ class ChatProvider(Protocol):
     provider: str
     model: str
 
-    async def complete(self, history: list[MessageRecord], max_response_tokens: int) -> ChatResult: ...
+    async def complete(
+        self,
+        history: list[MessageRecord],
+        max_response_tokens: int,
+        system_prompt: str | None = None,
+    ) -> ChatResult: ...
 
 
 class EmbeddingProvider(Protocol):

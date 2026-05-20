@@ -87,7 +87,7 @@ def retrieve_vectorless_memories(
         memories = store.search_text_memory_items(
             message.session_id,
             build_rag_query(message, context.memory_max_chars),
-            limit=context.retrieval_top_k,
+            limit=vectorless_retrieval_limit(context),
             exclude_source_ids=exclude_source_ids,
         )
         logger.info(
@@ -100,6 +100,10 @@ def retrieve_vectorless_memories(
     except Exception:
         logger.exception("vectorless retrieval failed session_id=%s message_id=%s", message.session_id, message.id)
         return []
+
+
+def vectorless_retrieval_limit(context: ContextConfig) -> int:
+    return min(context.retrieval_top_k, 4)
 
 
 async def index_messages_for_retrieval(

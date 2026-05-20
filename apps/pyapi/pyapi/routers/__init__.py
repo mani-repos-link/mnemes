@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from pyapi.config import ContextConfig
+from pyapi.config import ContextConfig, ToolConfig
 from pyapi.providers import ChatProvider, EmbeddingProvider
 from pyapi.store import Store
 
@@ -18,12 +18,14 @@ def create_router(
     chat_provider: ChatProvider,
     embedding_provider: EmbeddingProvider,
     context: ContextConfig,
+    tools: ToolConfig,
 ) -> APIRouter:
     services = AppServices(
         store=store,
         chat_provider=chat_provider,
         embedding_provider=embedding_provider,
         context=context,
+        tools=tools,
     )
     router = APIRouter()
 
@@ -40,6 +42,14 @@ def create_router(
                 "chat": {"provider": chat_provider.provider, "model": chat_provider.model},
                 "embedding": {"provider": embedding_provider.provider, "model": embedding_provider.model},
                 "memory": {"mode": context.memory_mode},
+                "tools": {
+                    "enabled": tools.enabled,
+                    "internetEnabled": tools.internet_enabled,
+                    "capabilities": {
+                        "localProjectInspection": tools.enabled,
+                        "publicWebSurfing": tools.enabled and tools.internet_enabled,
+                    },
+                },
             },
         }
 

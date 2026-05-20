@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from pyapi.context import build_llm_context
 from pyapi.dependencies import AppServices
+from pyapi.providers.prompts import assistant_system_prompt
 from pyapi.providers import MODEL_EMPTY_RESPONSE_MESSAGE, ChatResult, EmptyModelResponseError
 from pyapi.store import MessageRecord, NotFoundError
+from pyapi.tools import execute_tool_call, format_tool_result, parse_tool_call
 
 from .memory import indexed_memory_source_ids_for_context, index_messages_for_retrieval, retrieve_memories_for_message
 from .summary import update_summary_if_needed
@@ -53,6 +56,12 @@ async def create_assistant_response(
     context_messages: list[MessageRecord],
 ) -> AssistantResponseResult:
     store = services.store
+    await index_messages_for_retrieval(
+        store,
+        services.embedding_provider,
+        services.context,
+        context_messages,
+    )
     indexed_memory_source_ids = indexed_memory_source_ids_for_context(
         store,
         services.embedding_provider,
@@ -121,13 +130,69 @@ async def complete_with_fallback(
     history: list[MessageRecord],
 ) -> ChatResult:
     try:
-        return await services.chat_provider.complete(history, services.context.max_response_tokens)
+        return await complete_with_tools(services, history)
     except EmptyModelResponseError:
         return ChatResult(
             content=MODEL_EMPTY_RESPONSE_MESSAGE,
             provider=services.chat_provider.provider,
             model=services.chat_provider.model,
         )
+
+
+async def complete_with_tools(
+    services: AppServices,
+    history: list[MessageRecord],
+) -> ChatResult:
+    system_prompt = assistant_system_prompt(services.tools.enabled, services.tools.internet_enabled)
+    tool_history = list(history)
+
+    for attempt in range(services.tools.max_iterations + 1):
+        result = await services.chat_provider.complete(
+            tool_history,
+            services.context.max_response_tokens,
+            system_prompt=system_prompt,
+        )
+        tool_request = parse_tool_call(result.content) if services.tools.enabled else None
+        if tool_request is None:
+            return result
+
+        if attempt >= services.tools.max_iterations:
+            return ChatResult(
+                content="I could not finish the request because the tool loop reached its configured limit.",
+                provider=result.provider,
+                model=result.model,
+            )
+
+        tool_result = execute_tool_call(services.tools, tool_request, current_session_id=current_session_id(tool_history))
+        tool_history.append(synthetic_message("assistant", result.content))
+        tool_history.append(synthetic_message("system", format_tool_result(tool_result)))
+
+    return ChatResult(
+        content="I could not finish the request because the tool loop reached its configured limit.",
+        provider=services.chat_provider.provider,
+        model=services.chat_provider.model,
+    )
+
+
+def synthetic_message(role: str, content: str) -> MessageRecord:
+    return MessageRecord(
+        id=f"tool_{role}",
+        session_id="tool_loop",
+        role=role,
+        content=content,
+        provider=None,
+        model=None,
+        parent_message_id=None,
+        active_response_id=None,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+def current_session_id(history: list[MessageRecord]) -> str | None:
+    for message in reversed(history):
+        if message.session_id:
+            return message.session_id
+    return None
 
 
 def find_regeneration_anchor(history: list[MessageRecord], message_id: str) -> MessageRecord:

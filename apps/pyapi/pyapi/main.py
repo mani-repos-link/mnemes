@@ -22,7 +22,7 @@ def localhost_origin_regex() -> str:
 config = load_config()
 logger = logging.getLogger("pyapi")
 logger.info(
-    "config loaded addr=%s database=%s chat_provider=%s chat_model=%s embedding_provider=%s embedding_model=%s openrouter_base_url=%s openrouter_key=%s huggingface_base_url=%s huggingface_key=%s frontend_origins=%s memory_mode=%s memory_trigger_limit=%d memory_buffer_limit=%d retrieval_top_k=%d max_response_tokens=%d",
+    "config loaded addr=%s database=%s chat_provider=%s chat_model=%s embedding_provider=%s embedding_model=%s openrouter_base_url=%s openrouter_key=%s huggingface_base_url=%s huggingface_key=%s frontend_origins=%s memory_mode=%s memory_trigger_limit=%d memory_buffer_limit=%d retrieval_top_k=%d max_response_tokens=%d tools_enabled=%s internet_tools_enabled=%s tool_workspace=%s tool_iterations=%d",
     config.addr,
     config.database_url,
     config.chat.provider,
@@ -39,6 +39,10 @@ logger.info(
     config.context.context_memory_buffer_message_limit,
     config.context.retrieval_top_k,
     config.context.max_response_tokens,
+    config.tools.enabled,
+    config.tools.internet_enabled,
+    config.tools.workspace_root,
+    config.tools.max_iterations,
 )
 
 store = Store(config.database_url)
@@ -53,7 +57,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
-app.include_router(create_router(store, chat_provider, embedding_provider, config.context))
+app.include_router(create_router(store, chat_provider, embedding_provider, config.context, config.tools))
 
 
 @app.exception_handler(HTTPException)
